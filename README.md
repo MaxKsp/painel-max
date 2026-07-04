@@ -126,6 +126,20 @@ spam ou nem sair) — por isso a verificação é só um selo extra, não bloque
 o cadastro nem o login. Recuperação de senha por e-mail ainda não existe;
 fica pro próximo ciclo, quando houver um domínio próprio conectado.
 
+## Notificações
+
+- **No navegador**: ative em Perfil → Notificações. O site pede permissão e
+  avisa quando uma tarefa da agenda começa (funciona com o app aberto ou
+  instalado como PWA — no celular, use "Adicionar à tela inicial").
+- **Por e-mail** (funciona com o app fechado): ative o toggle em Perfil e
+  configure o cron na Hostinger:
+  1. Gere um token: `php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"`
+  2. Coloque no `config.php` do servidor: `define('CRON_SECRET', 'seu_token');`
+  3. hPanel → Avançado → Cron Jobs → novo job a cada 10 minutos:
+     `php /home/SEU_USUARIO/public_html/cron-notify.php seu_token`
+- Push nativo com o app fechado (Web Push/VAPID) fica pra um ciclo futuro —
+  ver ROADMAP.
+
 ## Backup
 
 Dentro do app, o ícone de engrenagem no topo abre "Configurações", com botões

@@ -59,40 +59,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel Max — Criar conta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{--bg:#000000;--surface:#161616;--line:#242424;--text:#EDEDED;--muted:#8A93A6;--accent:#3B82F6;--brick:#E15C56;}
-  *{box-sizing:border-box;}
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:'Archivo',Arial,sans-serif;}
-  .card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px;}
-  h1{font-size:20px;margin:0 0 4px;}
-  p.sub{color:var(--muted);font-size:13px;margin:0 0 24px;}
-  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px;}
-  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0d0d0d;color:var(--text);font-size:14px;margin-bottom:16px;font-family:inherit;}
-  input:focus{outline:none;border-color:var(--accent);}
-  button{width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:14px;font-family:inherit;}
-  button:hover{opacity:.9;}
-  .error{background:rgba(225,92,86,.12);color:var(--brick);border:1px solid rgba(225,92,86,.3);padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:16px;}
-  .footer{text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
-  .footer a{color:var(--accent);text-decoration:none;}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/auth.css">
 </head>
 <body>
+  <div class="brand">
+    <div class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5l8 9 8-9v14"/></svg></div>
+    <div class="brandname"><b>Painel</b> Max</div>
+  </div>
   <form class="card" method="POST" autocomplete="off">
     <?= csrf_field() ?>
-    <h1>Criar conta</h1>
-    <p class="sub">Cadastre-se pra usar o Painel Max.</p>
+    <h1>Criar sua conta</h1>
+    <p class="sub">Leva menos de um minuto. Seus dados ficam só com você.</p>
     <?php if ($error): ?><div class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
     <label for="username">Usuário</label>
-    <input type="text" id="username" name="username" required autofocus value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+    <input type="text" id="username" name="username" placeholder="seu.usuario" required autofocus value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
     <label for="email">E-mail</label>
-    <input type="email" id="email" name="email" required value="<?= htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+    <input type="email" id="email" name="email" placeholder="voce@exemplo.com" required value="<?= htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
     <label for="password">Senha</label>
-    <input type="password" id="password" name="password" required minlength="8">
+    <input type="password" id="password" name="password" placeholder="mínimo 8 caracteres" required minlength="8">
     <label for="confirm">Confirmar senha</label>
-    <input type="password" id="confirm" name="confirm" required minlength="8">
+    <input type="password" id="confirm" name="confirm" placeholder="repita a senha" required minlength="8">
     <button type="submit">Criar conta</button>
-    <div class="footer"><a href="login.php">Já tenho conta, entrar</a></div>
+    <div class="footer">Já tem conta? <a href="login.php">Entrar</a></div>
   </form>
 </body>
 </html>

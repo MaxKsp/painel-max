@@ -14,3 +14,8 @@ define('DB_PASS', 'sua_senha');
 // preenchido. Veja o README pra criar as credenciais no Google Cloud Console.
 define('GOOGLE_CLIENT_ID', '');
 define('GOOGLE_CLIENT_SECRET', '');
+
+// Token do cron de notificações por e-mail (cron-notify.php). Gere um valor
+// aleatório longo (ex: bin2hex(random_bytes(24))) e use o mesmo valor no
+// Cron Job do hPanel. Vazio = cron desabilitado.
+define('CRON_SECRET', '');

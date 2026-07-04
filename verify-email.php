@@ -23,29 +23,23 @@ if ($token !== '') {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel Max — Confirmação de e-mail</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{--bg:#000000;--surface:#161616;--line:#242424;--text:#EDEDED;--muted:#8A93A6;--accent:#3B82F6;--sage:#4FB07A;--brick:#E15C56;}
-  *{box-sizing:border-box;}
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:'Archivo',Arial,sans-serif;}
-  .card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px;text-align:center;}
-  h1{font-size:20px;margin:0 0 12px;}
-  p{color:var(--muted);font-size:14px;}
-  a{color:var(--accent);text-decoration:none;}
-  .ok{color:var(--sage);}
-  .fail{color:var(--brick);}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/auth.css">
 </head>
 <body>
-  <div class="card">
+  <div class="brand">
+    <div class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5l8 9 8-9v14"/></svg></div>
+    <div class="brandname"><b>Painel</b> Max</div>
+  </div>
+  <div class="card" style="text-align:center;">
     <?php if ($ok): ?>
-      <h1 class="ok">E-mail confirmado!</h1>
-      <p>Sua conta já pode usar o e-mail pra recuperação futura.</p>
+      <h1 class="ok-badge">E-mail confirmado!</h1>
+      <p class="sub">Sua conta já pode usar o e-mail pra recuperação futura.</p>
     <?php else: ?>
-      <h1 class="fail">Link inválido ou já usado</h1>
-      <p>Esse link de confirmação não é mais válido.</p>
+      <h1 class="fail-badge">Link inválido ou já usado</h1>
+      <p class="sub">Esse link de confirmação não é mais válido.</p>
     <?php endif; ?>
-    <p><a href="login.php">Voltar pro login</a></p>
+    <div class="footer"><a href="login.php">Voltar pro login</a></div>
   </div>
 </body>
 </html>

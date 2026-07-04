@@ -33,6 +33,14 @@ Options -Indexes
   ExpiresByType image/svg+xml "access plus 30 days"
   ExpiresByType application/javascript "access plus 7 days"
   ExpiresByType image/png "access plus 30 days"
+  ExpiresByType text/css "access plus 7 days"
 </IfModule>
+
+# O service worker precisa ser revalidado sempre, senão updates demoram a chegar.
+<Files "sw.js">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, must-revalidate"
+  </IfModule>
+</Files>
 
 php_flag display_errors off

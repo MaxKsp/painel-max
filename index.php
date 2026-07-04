@@ -8,41 +8,88 @@ require_login_page();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel Max</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050507">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
 <script>window.CSRF_TOKEN = "<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>";</script>
+<script>
+/* aplica o tema salvo antes do CSS renderizar, pra não piscar */
+try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
+  if(p.theme) document.documentElement.dataset.theme = p.theme;
+  if(p.bg) document.documentElement.dataset.bg = p.bg;
+}catch(e){}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#000000; --surface:#161616; --surface-2:#1E1E1E; --surface-3:#262626;
-    --line:#242424;
-    --accent:#3B82F6; --accent-soft:#0F2040;
+    --bg:#050507; --surface:#131318; --surface-2:#1B1B22; --surface-3:#24242D;
+    --line:rgba(255,255,255,.07); --line-strong:rgba(255,255,255,.13);
+    --accent:#4F8DF9; --accent-2:#8B5CF6; --accent-soft:rgba(79,141,249,.12);
+    --grad:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);
+    --glow:rgba(79,141,249,.35);
     --sage:#4FB07A; --brick:#E15C56;
     --purple:#9C7CE0; --tan:#8A93A6;
-    --text:#F2F2F2; --text-2:#8A8A8E; --text-3:#525256;
-    --r:14px; --r-sm:8px;
+    --text:#F4F4F6; --text-2:#9A9AA4; --text-3:#5C5C66;
+    --r:16px; --r-sm:10px;
+    --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+    --shadow-pop:0 12px 40px rgba(0,0,0,.5);
+    --aurora-a:rgba(79,141,249,.10); --aurora-b:rgba(139,92,246,.08);
   }
+  [data-theme="violeta"]{ --accent:#8B5CF6; --accent-2:#D946EF; --accent-soft:rgba(139,92,246,.12); --glow:rgba(139,92,246,.35); --aurora-a:rgba(139,92,246,.10); --aurora-b:rgba(217,70,239,.07); }
+  [data-theme="verde"]{ --accent:#10B981; --accent-2:#4F8DF9; --accent-soft:rgba(16,185,129,.12); --glow:rgba(16,185,129,.35); --aurora-a:rgba(16,185,129,.09); --aurora-b:rgba(79,141,249,.07); }
+  [data-theme="ambar"]{ --accent:#F59E0B; --accent-2:#EF4444; --accent-soft:rgba(245,158,11,.12); --glow:rgba(245,158,11,.32); --aurora-a:rgba(245,158,11,.08); --aurora-b:rgba(239,68,68,.06); }
+  [data-theme="rosa"]{ --accent:#EC4899; --accent-2:#8B5CF6; --accent-soft:rgba(236,72,153,.12); --glow:rgba(236,72,153,.35); --aurora-a:rgba(236,72,153,.09); --aurora-b:rgba(139,92,246,.07); }
+  [data-bg="preto"]{ --bg:#000000; --surface:#101013; --surface-2:#17171C; --surface-3:#202027; }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Archivo',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;padding-bottom:74px;}
+  html{scrollbar-color:var(--surface-3) transparent;}
+  body{
+    margin:0;color:var(--text);font-family:'Archivo',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;padding-bottom:74px;
+    background:
+      radial-gradient(900px 480px at 85% -10%, var(--aurora-b), transparent 60%),
+      radial-gradient(1100px 560px at -10% -5%, var(--aurora-a), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    min-height:100vh;
+  }
+  ::selection{background:var(--accent);color:#fff;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px;border:2px solid transparent;background-clip:content-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
   .mono{font-family:'IBM Plex Mono',monospace;}
   .wrap{max-width:900px;margin:0 auto;padding:0 18px;}
 
   /* topo */
-  .topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 0 12px;}
-  .wordmark{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:var(--text-3);text-transform:uppercase;}
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;padding:12px 0;
+    position:sticky;top:0;z-index:40;margin:0 -18px;padding-left:18px;padding-right:18px;
+    background:color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brandmark{width:30px;height:30px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px var(--glow);flex-shrink:0;}
+  .brandmark svg{width:16px;height:16px;color:#fff;}
+  .wordmark{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:var(--text-3);text-transform:uppercase;white-space:nowrap;}
   .wordmark b{color:var(--text);}
-  .sectiontabs{display:flex;gap:2px;}
-  .sectiontab{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;}
+  .sectiontabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;}
+  .sectiontab{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;transition:color .15s,background .15s,transform .12s;}
+  .sectiontab:hover{color:var(--text-2);}
+  .sectiontab:active{transform:scale(.92);}
   .sectiontab svg{width:18px;height:18px;}
-  .sectiontab.active{background:var(--accent);color:#fff;}
+  .sectiontab.active{background:var(--grad);color:#fff;box-shadow:0 2px 10px var(--glow);}
   .topbar-actions{display:flex;align-items:center;gap:10px;margin-left:10px;}
-  .icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;border:none;}
+  .icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;border:none;transition:color .15s,background .15s;}
   .icon-btn svg{width:18px;height:18px;}
   .icon-btn:hover{background:var(--surface-2);color:var(--text);}
 
-  .page{display:none;} .page.active{display:block;}
+  .page{display:none;}
+  .page.active{display:block;animation:pageIn .18s ease-out;}
+  @keyframes pageIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
 
   /* instrumento agora */
-  .instrument{border:1px solid var(--line);margin-bottom:18px;border-radius:var(--r);background:var(--surface);overflow:hidden;}
+  .instrument{border:1px solid var(--line);margin-top:18px;margin-bottom:18px;border-radius:var(--r);background:var(--surface);overflow:hidden;position:relative;box-shadow:var(--shadow-card);}
+  .instrument::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--grad);opacity:.85;}
   .instrument-head{padding:10px 16px;border-bottom:1px solid var(--line);}
   .instrument-head .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--text-3);text-transform:uppercase;}
   .instrument-body{padding:16px;}
@@ -53,7 +100,7 @@ require_login_page();
   .readout .rv{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent);}
   .readout .rv.sage{color:var(--sage);}
   .readout .rl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
-  .instrument.alarm{box-shadow:0 0 0 1px var(--accent);}
+  .instrument.alarm{box-shadow:0 0 0 1px var(--accent), 0 0 24px var(--glow);}
 
   /* cabecalho agenda */
   .agenda-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -64,8 +111,9 @@ require_login_page();
   .iconbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--text-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .iconbtn svg{width:16px;height:16px;}
   .iconbtn:hover{border-color:var(--accent);color:var(--accent);}
-  .addbtn{width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;line-height:1;}
-  .addbtn:hover{background:#5B93F7;}
+  .addbtn{width:34px;height:34px;border-radius:50%;border:none;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;line-height:1;box-shadow:0 3px 12px var(--glow);transition:transform .12s,filter .15s;}
+  .addbtn:hover{filter:brightness(1.1);}
+  .addbtn:active{transform:scale(.92);}
 
   /* grade mes */
   .monthgrid-heads{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px;}
@@ -121,8 +169,9 @@ require_login_page();
 
 
   .fin-subnav, .agenda-subnav{display:flex;gap:0;border:1px solid var(--line);border-radius:999px;width:fit-content;margin-bottom:20px;overflow:hidden;}
-  .fsub, .apill{padding:7px 16px;font-size:12px;color:var(--text-2);cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.04em;}
-  .fsub.active, .apill.active{background:var(--accent);color:#fff;}
+  .fsub, .apill{padding:7px 16px;font-size:12px;color:var(--text-2);cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.04em;transition:color .15s,background .15s;}
+  .fsub:hover, .apill:hover{color:var(--text);}
+  .fsub.active, .apill.active{background:var(--grad);color:#fff;box-shadow:0 2px 10px var(--glow);}
   .apage{display:none;} .apage.active{display:block;}
   .fpage{display:none;} .fpage.active{display:block;}
   .fpage-head{display:flex;justify-content:space-between;align-items:center;margin:26px 0 12px;}
@@ -140,8 +189,8 @@ require_login_page();
   .badge.b-temporaria{background:#3A2810;color:#E0A24F;}
   .badge.b-extra{background:#123321;color:var(--sage);}
 
-  .inccard{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;}
-  .inccard:hover{background:var(--surface-2);}
+  .inccard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s,border-color .15s,transform .12s;}
+  .inccard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-1px);}
   .inccard .typedot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
   .inccard .typedot.b-fixa{background:#7BA6F5;} .inccard .typedot.b-variavel{background:var(--purple);}
   .inccard .typedot.b-temporaria{background:#E0A24F;} .inccard .typedot.b-extra{background:var(--sage);}
@@ -152,8 +201,8 @@ require_login_page();
   .inccard .val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-variant-numeric:tabular-nums;color:var(--sage);}
   .inccard.inactive{opacity:.4;}
 
-  .expcard{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;}
-  .expcard:hover{background:var(--surface-2);}
+  .expcard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s,border-color .15s,transform .12s;}
+  .expcard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-1px);}
   .bankavatar{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;font-family:'IBM Plex Mono',monospace;overflow:hidden;position:relative;}
   .bankavatar img{width:100%;height:100%;object-fit:contain;padding:3px;box-sizing:border-box;background:#fff;border-radius:8px;}
   .bankavatar .fallback-initials{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px;}
@@ -162,8 +211,8 @@ require_login_page();
   .expcard .metarow{display:flex;gap:6px;margin-top:4px;}
   .expcard .val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-variant-numeric:tabular-nums;color:var(--brick);}
   .expcard .datebadge, .inccard .datebadge{font-size:10px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;}
-  .acccard{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;}
-  .acccard:hover{background:var(--surface-2);}
+  .acccard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s,border-color .15s,transform .12s;}
+  .acccard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-1px);}
   .acccard .info{flex:1;min-width:0;}
   .acccard .ttl{font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px;}
   .acccard .sub{font-size:10.5px;color:var(--text-3);margin-top:3px;font-family:'IBM Plex Mono',monospace;}
@@ -178,7 +227,8 @@ require_login_page();
   .barlist-fill{height:100%;border-radius:3px;}
 
   .dashgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;}
-  .dashcard{background:var(--surface);border-radius:16px;padding:18px 20px;min-width:0;overflow:hidden;box-sizing:border-box;}
+  .dashcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px;min-width:0;overflow:hidden;box-sizing:border-box;box-shadow:var(--shadow-card);transition:border-color .15s;}
+  .dashcard:hover{border-color:var(--line-strong);}
   .dashcard-title{font-size:15px;font-weight:600;color:var(--text);}
   .dashcard-sub{font-size:12px;color:var(--text-3);margin-top:3px;margin-bottom:14px;}
   .heatgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:100%;box-sizing:border-box;}
@@ -214,7 +264,9 @@ require_login_page();
 
   h2{font-size:12px;font-weight:600;margin:26px 0 12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-2);}
   .form-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
-  input,select{background:var(--surface-2);border:1px solid var(--line);color:var(--text);padding:9px 10px;font-size:13px;font-family:'Archivo',sans-serif;border-radius:var(--r-sm);}
+  input,select{background:var(--surface-2);border:1px solid var(--line);color:var(--text);padding:9px 10px;font-size:13px;font-family:'Archivo',sans-serif;border-radius:var(--r-sm);transition:border-color .15s,box-shadow .15s;}
+  input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  input::placeholder{color:var(--text-3);}
   select{
     appearance:none; -webkit-appearance:none; -moz-appearance:none;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238891A3' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
@@ -266,7 +318,7 @@ require_login_page();
   /* modal */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;align-items:center;justify-content:center;padding:20px;}
   .modal-overlay.open{display:flex;}
-  .modal{background:var(--surface);border:1px solid var(--line);width:100%;max-width:420px;padding:24px;border-radius:18px;}
+  .modal{background:var(--surface);border:1px solid var(--line-strong);width:100%;max-width:420px;padding:24px;border-radius:18px;box-shadow:var(--shadow-pop);animation:pageIn .16s ease-out;}
   .modal h3{margin:0 0 18px;font-size:15px;font-weight:600;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
@@ -274,15 +326,45 @@ require_login_page();
   .field-row{display:flex;gap:10px;}
   .field-row .field{flex:1;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
-  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--text-2);padding:9px 18px;font-size:12px;cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;}
-  .btn-primary{background:var(--accent);border:none;color:#fff;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;}
+  /* perfil */
+  .profilecard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow-card);}
+  .profilecard-title{font-size:15px;font-weight:600;margin-bottom:12px;}
+  .profilecard-sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);margin-bottom:8px;}
+  .profile-account{display:flex;align-items:center;gap:14px;}
+  .avatar{width:48px;height:48px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;color:#fff;box-shadow:0 4px 16px var(--glow);text-transform:uppercase;}
+  .profile-account .ttl{font-size:16px;font-weight:600;}
+  .profile-account .sub{font-size:12.5px;color:var(--text-2);margin-top:2px;}
+  .themegrid{display:flex;gap:10px;}
+  .themedot{width:38px;height:38px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,var(--dot1),var(--dot2));transition:transform .12s,border-color .15s,box-shadow .15s;}
+  .themedot:hover{transform:scale(1.08);}
+  .themedot.sel{border-color:#fff;box-shadow:0 0 0 3px var(--accent-soft), 0 4px 14px rgba(0,0,0,.4);}
+  .bgpick{display:flex;gap:8px;}
+  .bgopt{padding:8px 16px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--text-2);font-size:12.5px;cursor:pointer;font-family:'Archivo',sans-serif;transition:all .15s;}
+  .bgopt.sel{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 2px 10px var(--glow);}
+  .switchrow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .switchrow:last-child{border-bottom:none;padding-bottom:0;}
+  .sr-ttl{font-size:14px;font-weight:500;}
+  .sr-sub{font-size:12px;color:var(--text-2);margin-top:2px;line-height:1.45;}
+  .switchrow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:44px;height:25px;border-radius:99px;background:var(--surface-3);position:relative;cursor:pointer;transition:background .18s;flex-shrink:0;margin:0;border:none;}
+  .switchrow input[type=checkbox]::after{content:'';position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:left .18s;}
+  .switchrow input[type=checkbox]:checked{background:var(--accent);}
+  .switchrow input[type=checkbox]:checked::after{left:22px;}
+
+  .btn-ghost{background:transparent;border:1px solid var(--line-strong);color:var(--text-2);padding:9px 18px;font-size:12px;cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;transition:color .15s,border-color .15s,background .15s;}
+  .btn-ghost:hover{color:var(--text);border-color:var(--accent);}
+  .btn-primary{background:var(--grad);border:none;color:#fff;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;box-shadow:0 3px 12px var(--glow);transition:transform .12s,box-shadow .15s,filter .15s;}
+  .btn-primary:hover{filter:brightness(1.08);box-shadow:0 5px 18px var(--glow);}
+  .btn-primary:active{transform:scale(.97);}
 </style>
 </head>
 <body>
 
 <div class="wrap">
   <div class="topbar">
-    <div class="wordmark"><b>Painel</b> Max</div>
+    <div class="brand">
+      <div class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5l8 9 8-9v14"/></svg></div>
+      <div class="wordmark"><b>Painel</b> Max</div>
+    </div>
     <div class="sectiontabs" id="sectiontabs">
       <div class="sectiontab active" data-page="agenda" title="Agenda">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
@@ -293,11 +375,9 @@ require_login_page();
       <div class="sectiontab" data-page="diagnostico" title="Diagnóstico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
       </div>
-    </div>
-    <div class="topbar-actions">
-      <button type="button" class="icon-btn" id="btnSettings" title="Configurações">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04z"/></svg>
-      </button>
+      <div class="sectiontab" data-page="perfil" title="Perfil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+      </div>
     </div>
   </div>
 
@@ -447,6 +527,85 @@ require_login_page();
     <button class="action" id="btnAnalyze">Rodar diagnóstico</button>
     <div id="insightsResult" style="margin-top:16px;white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text-2);"></div>
   </div>
+
+  <div class="page" id="page-perfil">
+    <h2 style="margin:18px 0 4px;">Perfil</h2>
+    <p class="footnote" style="margin-bottom:16px;">Sua conta, aparência do painel, notificações e segurança.</p>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Conta</div>
+      <div class="profile-account">
+        <div class="avatar" id="pfAvatar">?</div>
+        <div class="info">
+          <div class="ttl" id="pfUsername">—</div>
+          <div class="sub" id="pfEmail">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Aparência</div>
+      <div class="profilecard-sub">Cor de destaque</div>
+      <div class="themegrid" id="themeGrid">
+        <button class="themedot" data-t="" style="--dot1:#4F8DF9;--dot2:#8B5CF6;" title="Azul"></button>
+        <button class="themedot" data-t="violeta" style="--dot1:#8B5CF6;--dot2:#D946EF;" title="Violeta"></button>
+        <button class="themedot" data-t="verde" style="--dot1:#10B981;--dot2:#4F8DF9;" title="Verde"></button>
+        <button class="themedot" data-t="ambar" style="--dot1:#F59E0B;--dot2:#EF4444;" title="Âmbar"></button>
+        <button class="themedot" data-t="rosa" style="--dot1:#EC4899;--dot2:#8B5CF6;" title="Rosa"></button>
+      </div>
+      <div class="profilecard-sub" style="margin-top:14px;">Fundo</div>
+      <div class="bgpick" id="bgPick">
+        <button class="bgopt" data-b="">Grafite</button>
+        <button class="bgopt" data-b="preto">Preto puro</button>
+      </div>
+    </div>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Notificações</div>
+      <label class="switchrow">
+        <div><div class="sr-ttl">Notificações do navegador</div><div class="sr-sub" id="notifBrowserSub">Avisa quando uma tarefa da agenda começa (com o app aberto ou instalado).</div></div>
+        <input type="checkbox" id="tglNotifBrowser">
+      </label>
+      <label class="switchrow">
+        <div><div class="sr-ttl">Receber por e-mail</div><div class="sr-sub">Envia um e-mail quando uma tarefa está pra começar, mesmo com o app fechado.</div></div>
+        <input type="checkbox" id="tglNotifEmail">
+      </label>
+    </div>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Segurança</div>
+      <div id="totpStatus" style="font-size:13px;color:var(--text-2);margin-bottom:10px;">Carregando...</div>
+      <button class="btn-ghost" id="btnEnable2fa" style="width:100%;display:none;">Ativar verificação em duas etapas</button>
+      <div id="totpEnrollBox" style="display:none;">
+        <div id="totpQr" style="display:flex;justify-content:center;margin:12px 0;"></div>
+        <div style="font-size:12px;color:var(--text-2);text-align:center;margin-bottom:12px;word-break:break-all;">Chave manual: <code id="totpManualKey"></code></div>
+        <input type="text" id="totpCode" placeholder="Código de 6 dígitos" inputmode="numeric" style="margin-bottom:8px;width:100%;">
+        <button class="btn-primary" id="btnConfirm2fa" style="width:100%;">Confirmar ativação</button>
+      </div>
+      <div id="totpBackupCodesBox" style="display:none;">
+        <div style="font-size:12px;color:var(--text-2);margin:10px 0 8px;">Guarde esses códigos — cada um só funciona uma vez, caso você perca acesso ao app autenticador:</div>
+        <div id="totpBackupCodesList" style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.8;"></div>
+      </div>
+      <button class="btn-ghost" id="btnDisable2fa" style="width:100%;display:none;color:var(--brick);border-color:var(--brick);">Desativar 2FA</button>
+      <div id="totpDisableBox" style="display:none;margin-top:8px;">
+        <input type="password" id="totpDisablePassword" placeholder="Confirme sua senha" style="margin-bottom:8px;width:100%;">
+        <button class="btn-ghost" id="btnConfirmDisable2fa" style="width:100%;color:var(--brick);border-color:var(--brick);">Confirmar desativação</button>
+      </div>
+    </div>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Backup</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-ghost" id="btnExportBackup" style="flex:1;min-width:160px;">Baixar backup (.json)</button>
+        <button class="btn-ghost" id="btnImportBackup" style="flex:1;min-width:160px;">Restaurar backup</button>
+      </div>
+      <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
+    </div>
+
+    <div id="settingsMsg" style="display:none;font-size:12.5px;margin:2px 0 12px;color:var(--sage);"></div>
+
+    <button class="btn-ghost" id="btnLogout" style="width:100%;color:var(--brick);border-color:var(--brick);margin-bottom:24px;">Sair da conta</button>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -584,43 +743,6 @@ require_login_page();
       <button class="btn-ghost" id="acDelete" style="display:none;margin-right:auto;color:var(--brick);border-color:var(--brick);">Excluir</button>
       <button class="btn-ghost" id="acCancel">Cancelar</button>
       <button class="btn-primary" id="acSave">Salvar</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="settingsModalOverlay">
-  <div class="modal">
-    <h3>Configurações</h3>
-    <div class="field">
-      <label>Backup</label>
-      <button class="btn-ghost" id="btnExportBackup" style="width:100%;margin-bottom:8px;">Baixar backup (.json)</button>
-      <button class="btn-ghost" id="btnImportBackup" style="width:100%;">Restaurar backup</button>
-      <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
-    </div>
-    <div class="field">
-      <label>Segurança (2FA)</label>
-      <div id="totpStatus" style="font-size:13px;color:var(--text-2);margin-bottom:8px;">Carregando...</div>
-      <button class="btn-ghost" id="btnEnable2fa" style="width:100%;display:none;">Ativar 2FA</button>
-      <div id="totpEnrollBox" style="display:none;">
-        <div id="totpQr" style="display:flex;justify-content:center;margin:12px 0;"></div>
-        <div style="font-size:12px;color:var(--text-2);text-align:center;margin-bottom:12px;word-break:break-all;">Chave manual: <code id="totpManualKey"></code></div>
-        <input type="text" id="totpCode" placeholder="Código de 6 dígitos" inputmode="numeric" style="margin-bottom:8px;">
-        <button class="btn-primary" id="btnConfirm2fa" style="width:100%;">Confirmar ativação</button>
-      </div>
-      <div id="totpBackupCodesBox" style="display:none;">
-        <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Guarde esses códigos — cada um só funciona uma vez, caso você perca acesso ao app autenticador:</div>
-        <div id="totpBackupCodesList" style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.8;"></div>
-      </div>
-      <button class="btn-ghost" id="btnDisable2fa" style="width:100%;display:none;color:var(--brick);border-color:var(--brick);">Desativar 2FA</button>
-      <div id="totpDisableBox" style="display:none;">
-        <input type="password" id="totpDisablePassword" placeholder="Confirme sua senha" style="margin-bottom:8px;">
-        <button class="btn-ghost" id="btnConfirmDisable2fa" style="width:100%;color:var(--brick);border-color:var(--brick);">Confirmar desativação</button>
-      </div>
-    </div>
-    <div class="field" id="settingsMsg" style="display:none;font-size:12px;color:var(--sage);"></div>
-    <div class="modal-actions">
-      <button class="btn-ghost" id="btnLogout" style="margin-right:auto;color:var(--brick);border-color:var(--brick);">Sair</button>
-      <button class="btn-ghost" id="settingsClose">Fechar</button>
     </div>
   </div>
 </div>
@@ -1098,7 +1220,13 @@ function renderHero(){
     document.getElementById('nextIn').textContent = (h>0?h+'h ':'') + m + 'min';
     if (diff===0){
       const ak = dkey(now)+':'+todays[nextIdx].id;
-      if (!firedAlarms[ak]){ firedAlarms[ak]=true; hero.classList.add('alarm'); setTimeout(()=>hero.classList.remove('alarm'),8000); }
+      if (!firedAlarms[ak]){
+        firedAlarms[ak]=true;
+        hero.classList.add('alarm'); setTimeout(()=>hero.classList.remove('alarm'),8000);
+        if ('Notification' in window && Notification.permission==='granted' && localStorage.getItem('pm_notif')==='1'){
+          try{ new Notification('Hora de: ' + todays[nextIdx].title, { body: todays[nextIdx].time + ' — Painel Max', icon: 'assets/icon-192.png', tag: ak }); }catch(e){}
+        }
+      }
     }
   } else { document.getElementById('nextIn').textContent = '--'; }
   const doneN = todays.filter(t=>checklist[occId(t,now)]).length;
@@ -1145,6 +1273,7 @@ document.querySelectorAll('.sectiontab').forEach(t=>{
     t.classList.add('active');
     document.getElementById('page-'+t.dataset.page).classList.add('active');
     if(t.dataset.page==='financeiro') renderFinance();
+    if(t.dataset.page==='perfil') renderPerfil();
   };
 });
 
@@ -1860,23 +1989,84 @@ document.getElementById('btnAnalyze').onclick = async ()=>{
   btn.disabled = false; btn.textContent = 'Rodar diagnóstico';
 };
 
-const settingsModalOverlay = document.getElementById('settingsModalOverlay');
+/* ---- Perfil: mensagens, temas e notificações ---- */
 const settingsMsg = document.getElementById('settingsMsg');
 function showSettingsMsg(text, isError){
   settingsMsg.textContent = text;
   settingsMsg.style.color = isError ? 'var(--brick)' : 'var(--sage)';
   settingsMsg.style.display = 'block';
 }
-document.getElementById('btnSettings').onclick = ()=>{
+document.getElementById('btnLogout').onclick = ()=>{ location.href = 'logout.php'; };
+
+function applyPrefs(prefs){
+  prefs = prefs || {};
+  document.documentElement.dataset.theme = prefs.theme || '';
+  document.documentElement.dataset.bg = prefs.bg || '';
+  try{ localStorage.setItem('pm_prefs', JSON.stringify({theme:prefs.theme||'', bg:prefs.bg||''})); }catch(e){}
+  document.querySelectorAll('#themeGrid .themedot').forEach(d=> d.classList.toggle('sel', (prefs.theme||'')===d.dataset.t));
+  document.querySelectorAll('#bgPick .bgopt').forEach(b=> b.classList.toggle('sel', (prefs.bg||'')===b.dataset.b));
+}
+async function savePrefs(patch){
+  const prefs = Object.assign(await storeGet('user_prefs', {}), patch);
+  applyPrefs(prefs);
+  await storeSet('user_prefs', prefs);
+}
+document.querySelectorAll('#themeGrid .themedot').forEach(d=>{ d.onclick = ()=> savePrefs({theme: d.dataset.t}); });
+document.querySelectorAll('#bgPick .bgopt').forEach(b=>{ b.onclick = ()=> savePrefs({bg: b.dataset.b}); });
+
+async function renderPerfil(){
   settingsMsg.style.display = 'none';
   document.getElementById('totpEnrollBox').style.display = 'none';
   document.getElementById('totpBackupCodesBox').style.display = 'none';
   document.getElementById('totpDisableBox').style.display = 'none';
-  settingsModalOverlay.classList.add('open');
+  applyPrefs(await storeGet('user_prefs', {}));
   refreshTotpStatus();
+  const tglB = document.getElementById('tglNotifBrowser');
+  const sub = document.getElementById('notifBrowserSub');
+  if (!('Notification' in window)){
+    tglB.checked = false; tglB.disabled = true;
+    sub.textContent = 'Este navegador não suporta notificações.';
+  } else {
+    tglB.checked = Notification.permission === 'granted' && localStorage.getItem('pm_notif') === '1';
+    if (Notification.permission === 'denied') sub.textContent = 'Permissão negada no navegador — libere nas configurações do site pra ativar.';
+  }
+  try{
+    const r = await fetch('api/me.php');
+    if (r.ok){
+      const me = await r.json();
+      document.getElementById('pfUsername').textContent = me.username;
+      document.getElementById('pfEmail').textContent = me.email || 'sem e-mail cadastrado';
+      document.getElementById('pfAvatar').textContent = (me.username||'?').slice(0,1);
+      document.getElementById('tglNotifEmail').checked = !!me.notify_email;
+      document.getElementById('tglNotifEmail').disabled = !me.email;
+    }
+  }catch(e){}
+}
+
+document.getElementById('tglNotifBrowser').onchange = async (ev)=>{
+  const tgl = ev.target;
+  if (tgl.checked){
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted'){ tgl.checked = false; showSettingsMsg('Permissão de notificação não concedida.', true); return; }
+    localStorage.setItem('pm_notif', '1');
+    new Notification('Painel Max', { body: 'Notificações ativadas! Você será avisado quando uma tarefa começar.', icon: 'assets/icon-192.png' });
+  } else {
+    localStorage.setItem('pm_notif', '0');
+  }
 };
-document.getElementById('settingsClose').onclick = ()=> settingsModalOverlay.classList.remove('open');
-document.getElementById('btnLogout').onclick = ()=>{ location.href = 'logout.php'; };
+
+document.getElementById('tglNotifEmail').onchange = async (ev)=>{
+  const tgl = ev.target;
+  try{
+    const r = await fetch('api/prefs.php', {
+      method:'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRF-Token': window.CSRF_TOKEN},
+      body: JSON.stringify({ notify_email: tgl.checked })
+    });
+    if (!r.ok) throw new Error('prefs failed');
+    showSettingsMsg(tgl.checked ? 'Notificações por e-mail ativadas.' : 'Notificações por e-mail desativadas.', false);
+  }catch(e){ tgl.checked = !tgl.checked; showSettingsMsg('Não consegui salvar agora, tenta de novo.', true); }
+};
 document.getElementById('btnExportBackup').onclick = async ()=>{
   try{
     const r = await fetch('api/export.php');
@@ -1986,10 +2176,12 @@ document.getElementById('btnConfirmDisable2fa').onclick = async ()=>{
 
 async function init(){
   document.getElementById('ifoodDate').value = dkey(new Date());
+  applyPrefs(await storeGet('user_prefs', {}));
   await ensureSeeded();
   renderHomeCharts();
   renderAgenda();
   setInterval(()=>{ renderHero(); if (document.getElementById('apage-inicio').classList.contains('active')) renderHomeCharts(); }, 20000);
+  if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 }
 init();
 </script>

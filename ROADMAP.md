@@ -48,6 +48,9 @@ Backlog organizado por prioridade. Cada item deve virar uma branch
 - [ ] **Recuperação de senha por e-mail** — fica pra quando houver domínio
       próprio conectado (e-mail não é confiável no domínio temporário da
       Hostinger).
+- [ ] **Web Push (VAPID)** — notificação nativa com o app fechado. Exige
+      biblioteca de criptografia via composer; hoje o caminho pro app
+      fechado é o aviso por e-mail (cron-notify.php).
 - [ ] **Endurecer verificação de e-mail** — hoje é só um selo (não bloqueia
       login); revisar quando o e-mail for confiável.
 
