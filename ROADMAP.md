@@ -5,17 +5,15 @@ Backlog organizado por prioridade. Cada item deve virar uma branch
 
 ## 🔴 Crítico (risco de perda de dado)
 
-- [ ] **Exportar/importar backup em JSON** — botão em Configurações que baixa
-      um `.json` com tudo (rendas, despesas, contas, tarefas) e outro que
-      restaura a partir de um arquivo. Enquanto não migramos pra um banco de
-      dados de verdade (Supabase/VPS), isso é a rede de segurança.
-- [ ] **Migração pra Supabase na VPS** — ver `painel-max-app/DEPLOY.md` do
-      projeto original. Isso tira a dependência de o dado viver só num
-      artefato do Claude.
+- [x] **Exportar/importar backup em JSON** — ícone de Configurações no topo,
+      baixa um `.json` com tudo e outro botão restaura a partir de um arquivo.
+- [x] **Sair do artefato do Claude / persistência real** — trocado
+      `window.storage` por backend próprio em PHP + MySQL, hospedado na
+      Hostinger, atrás de login com sessão, CSRF e rate-limit.
 
 ## 🟠 Funcionalidade importante
 
-- [x] **Despesas recorrentes mensais** — `feature/despesas-recorrentes` (PR já aberto)
+- [x] **Despesas recorrentes mensais** — mergeado na `master`.
 - [ ] **Rendas com recorrência mais clara** — hoje "Fixa" e "Temporária" já
       são recorrentes por natureza, mas não aparecem no mapa de calor nem
       geram "ocorrências" visíveis como as despesas agora geram.
@@ -35,9 +33,13 @@ Backlog organizado por prioridade. Cada item deve virar uma branch
       progresso mostrando quanto já foi gasto.
 - [ ] **Busca/filtro nos lançamentos** — hoje só dá pra rolar a lista.
 - [ ] **Exportar relatório em CSV** — pra abrir numa planilha.
-- [ ] **Separar `index.html` em arquivos** (`style.css`, `app.js`) — hoje
+- [ ] **Separar `index.php` em arquivos** (`style.css`, `app.js`) — hoje
       tudo está num arquivo só; bom pra simplicidade, ruim pra diffs de PR
       conforme o projeto cresce.
+- [ ] **2FA (TOTP) no login** — camada extra de segurança além de
+      usuário/senha, se quiser reforçar ainda mais o acesso.
+- [ ] **Login com Google** — trocar o login usuário/senha único por OAuth,
+      caso vire multiusuário no futuro.
 
 ## Convenção de commits
 

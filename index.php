@@ -1,9 +1,14 @@
+<?php
+require_once __DIR__ . '/auth.php';
+require_login_page();
+?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel Max</title>
+<script>window.CSRF_TOKEN = "<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>";</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -19,7 +24,6 @@
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Archivo',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;padding-bottom:74px;}
   .mono{font-family:'IBM Plex Mono',monospace;}
-  .banner{background:var(--accent-soft);color:var(--accent);font-size:11px;padding:7px 16px;text-align:center;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;}
   .wrap{max-width:900px;margin:0 auto;padding:0 18px;}
 
   /* topo */
@@ -30,6 +34,10 @@
   .sectiontab{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;}
   .sectiontab svg{width:18px;height:18px;}
   .sectiontab.active{background:var(--accent);color:#fff;}
+  .topbar-actions{display:flex;align-items:center;gap:10px;margin-left:10px;}
+  .icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;background:transparent;border:none;}
+  .icon-btn svg{width:18px;height:18px;}
+  .icon-btn:hover{background:var(--surface-2);color:var(--text);}
 
   .page{display:none;} .page.active{display:block;}
 
@@ -272,8 +280,6 @@
 </head>
 <body>
 
-<div class="banner">PRÉVIA — roda dentro do Claude. Versão final: login Google + Supabase na sua VPS.</div>
-
 <div class="wrap">
   <div class="topbar">
     <div class="wordmark"><b>Painel</b> Max</div>
@@ -287,6 +293,11 @@
       <div class="sectiontab" data-page="diagnostico" title="Diagnóstico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
       </div>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="icon-btn" id="btnSettings" title="Configurações">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04z"/></svg>
+      </button>
     </div>
   </div>
 
@@ -576,6 +587,23 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="settingsModalOverlay">
+  <div class="modal">
+    <h3>Configurações</h3>
+    <div class="field">
+      <label>Backup</label>
+      <button class="btn-ghost" id="btnExportBackup" style="width:100%;margin-bottom:8px;">Baixar backup (.json)</button>
+      <button class="btn-ghost" id="btnImportBackup" style="width:100%;">Restaurar backup</button>
+      <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
+    </div>
+    <div class="field" id="settingsMsg" style="display:none;font-size:12px;color:var(--sage);"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnLogout" style="margin-right:auto;color:var(--brick);border-color:var(--brick);">Sair</button>
+      <button class="btn-ghost" id="settingsClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 const CATS = { treino:'Treino', trabalho:'Trabalho', estudo:'Estudo', ifood:'iFood', descanso:'Descanso', deslocamento:'Deslocamento' };
@@ -656,11 +684,23 @@ function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; 
 function startOfWeek(d){ const r=new Date(d); r.setDate(r.getDate()-r.getDay()); r.setHours(0,0,0,0); return r; }
 
 async function storeGet(key, fallback){
-  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fallback; }
-  catch(e){ return fallback; }
+  try{
+    const r = await fetch('api/data.php?key=' + encodeURIComponent(key));
+    if (r.status === 401){ location.href = 'login.php'; return fallback; }
+    if (!r.ok) return fallback;
+    const j = await r.json();
+    return (j.value === null || j.value === undefined) ? fallback : j.value;
+  } catch(e){ return fallback; }
 }
 async function storeSet(key, value){
-  try{ await window.storage.set(key, JSON.stringify(value)); }catch(e){ console.error(e); }
+  try{
+    const r = await fetch('api/data.php', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRF-Token': window.CSRF_TOKEN},
+      body: JSON.stringify({key, value})
+    });
+    if (r.status === 401) location.href = 'login.php';
+  } catch(e){ console.error(e); }
 }
 
 const SEED_TASKS = [
@@ -1673,6 +1713,51 @@ document.getElementById('btnAnalyze').onclick = async ()=>{
   await new Promise(r=>setTimeout(r,600));
   out.textContent = 'Prévia: na versão final, o diagnóstico roda pelo Gemini no servidor, olhando sua taxa de agenda cumprida e seu caixa dos últimos 14 dias.';
   btn.disabled = false; btn.textContent = 'Rodar diagnóstico';
+};
+
+const settingsModalOverlay = document.getElementById('settingsModalOverlay');
+const settingsMsg = document.getElementById('settingsMsg');
+function showSettingsMsg(text, isError){
+  settingsMsg.textContent = text;
+  settingsMsg.style.color = isError ? 'var(--brick)' : 'var(--sage)';
+  settingsMsg.style.display = 'block';
+}
+document.getElementById('btnSettings').onclick = ()=>{
+  settingsMsg.style.display = 'none';
+  settingsModalOverlay.classList.add('open');
+};
+document.getElementById('settingsClose').onclick = ()=> settingsModalOverlay.classList.remove('open');
+document.getElementById('btnLogout').onclick = ()=>{ location.href = 'logout.php'; };
+document.getElementById('btnExportBackup').onclick = async ()=>{
+  try{
+    const r = await fetch('api/export.php');
+    if (!r.ok) throw new Error('export failed');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'painel-max-backup-' + dkey(new Date()) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showSettingsMsg('Backup baixado com sucesso.', false);
+  } catch(e){ showSettingsMsg('Não consegui gerar o backup agora.', true); }
+};
+document.getElementById('btnImportBackup').onclick = ()=> document.getElementById('importBackupFile').click();
+document.getElementById('importBackupFile').onchange = async (ev)=>{
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const r = await fetch('api/import.php', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRF-Token': window.CSRF_TOKEN},
+      body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error('import failed');
+    showSettingsMsg('Backup restaurado. Recarregando...', false);
+    setTimeout(()=> location.reload(), 1200);
+  } catch(e){ showSettingsMsg('Arquivo inválido ou falha ao restaurar.', true); }
 };
 
 async function init(){
