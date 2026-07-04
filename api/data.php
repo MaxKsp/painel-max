@@ -9,6 +9,9 @@ $db = get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
+    // Leitura não mexe na sessão: solta o lock pra não serializar
+    // requisições paralelas do mesmo usuário.
+    session_write_close();
     if (isset($_GET['all'])) {
         $stmt = $db->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ?');
         $stmt->execute([$uid]);
@@ -35,9 +38,15 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     require_csrf();
-    $body = json_decode(file_get_contents('php://input'), true);
+    $raw = file_get_contents('php://input', false, null, 0, 2 * 1024 * 1024 + 1);
+    if (strlen($raw) > 2 * 1024 * 1024) {
+        http_response_code(413);
+        echo json_encode(['error' => 'payload too large']);
+        exit;
+    }
+    $body = json_decode($raw, true);
     $key = is_array($body) ? (string)($body['key'] ?? '') : '';
-    if ($key === '' || !is_array($body) || !array_key_exists('value', $body)) {
+    if ($key === '' || strlen($key) > 255 || !is_array($body) || !array_key_exists('value', $body)) {
         http_response_code(400);
         echo json_encode(['error' => 'invalid payload']);
         exit;

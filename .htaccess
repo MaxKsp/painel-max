@@ -4,7 +4,9 @@ RewriteEngine On
 RewriteCond %{HTTPS} off
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-<FilesMatch "^(config\.php|config\.example\.php|schema\.sql)$">
+# Arquivos que nunca devem ser servidos diretamente: credenciais, schema e
+# includes internos (só fazem sentido via require_once de outra página).
+<FilesMatch "^(config\.php|config\.example\.php|schema\.sql|db\.php|auth\.php|totp\.php)$">
   Require all denied
 </FilesMatch>
 
@@ -14,6 +16,23 @@ Options -Indexes
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  # 'unsafe-inline' é necessário porque o app usa <script>/style inline no
+  # index.php; a CSP ainda impede carregar script de qualquer host que não
+  # seja o próprio site ou o CDN do Chart.js.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/png "access plus 30 days"
 </IfModule>
 
 php_flag display_errors off

@@ -16,12 +16,17 @@ $error = '';
 $show2fa = !empty($_SESSION['pending_2fa_user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['code'])) {
-        if (attempt_2fa((string)$_POST['code'])) {
+    if (!csrf_form_ok()) {
+        $error = 'Sessão expirada. Tente de novo.';
+    } elseif (isset($_POST['code'])) {
+        $result = attempt_2fa((string)$_POST['code']);
+        if ($result === 'ok') {
             header('Location: index.php');
             exit;
         }
-        $error = 'Código inválido.';
+        $error = $result === 'locked'
+            ? 'Muitas tentativas erradas. Tente novamente em alguns minutos.'
+            : 'Código inválido.';
         $show2fa = true;
     } else {
         $username = trim((string)($_POST['username'] ?? ''));
@@ -71,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 <?php if ($show2fa): ?>
   <form class="card" method="POST" autocomplete="off">
+    <?= csrf_field() ?>
     <h1>Verificação em duas etapas</h1>
     <p class="sub">Digite o código do seu app autenticador (ou um código de backup).</p>
     <?php if ($error): ?><div class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
@@ -81,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </form>
 <?php else: ?>
   <form class="card" method="POST" autocomplete="off">
+    <?= csrf_field() ?>
     <h1>Painel Max</h1>
     <p class="sub">Entre com suas credenciais para continuar.</p>
     <?php if ($error): ?><div class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>

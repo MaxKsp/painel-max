@@ -7,11 +7,24 @@ header('Content-Type: application/json; charset=utf-8');
 $uid = require_login();
 require_csrf();
 
-$data = json_decode(file_get_contents('php://input'), true);
-if (!is_array($data)) {
+$raw = file_get_contents('php://input', false, null, 0, 10 * 1024 * 1024 + 1);
+if (strlen($raw) > 10 * 1024 * 1024) {
+    http_response_code(413);
+    echo json_encode(['error' => 'backup too large']);
+    exit;
+}
+$data = json_decode($raw, true);
+if (!is_array($data) || count($data) > 500) {
     http_response_code(400);
     echo json_encode(['error' => 'invalid backup file']);
     exit;
+}
+foreach ($data as $key => $value) {
+    if (!is_string($key) || strlen($key) > 255) {
+        http_response_code(400);
+        echo json_encode(['error' => 'invalid backup file']);
+        exit;
+    }
 }
 
 $db = get_db();

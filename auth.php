@@ -7,6 +7,7 @@ require_once __DIR__ . '/totp.php';
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
+ini_set('session.use_strict_mode', '1');
 
 $__secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
 session_set_cookie_params([
@@ -63,6 +64,17 @@ function require_csrf(): void {
     }
 }
 
+/** Campo hidden pra formulários HTML (login/registro). */
+function csrf_field(): string {
+    return '<input type="hidden" name="csrf" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">';
+}
+
+/** Valida o token vindo de um POST de formulário. */
+function csrf_form_ok(): bool {
+    $sent = (string)($_POST['csrf'] ?? '');
+    return !empty($_SESSION['csrf']) && $sent !== '' && hash_equals($_SESSION['csrf'], $sent);
+}
+
 function client_ip(): string {
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
@@ -114,27 +126,39 @@ function attempt_login(string $username, string $password): string {
         $_SESSION['pending_2fa_user_id'] = (int)$user['id'];
         return '2fa_required';
     }
-    session_regenerate_id(true);
-    $_SESSION['user_id'] = (int)$user['id'];
+    complete_login((int)$user['id']);
     return 'ok';
 }
 
-/** Confere o codigo TOTP (ou um codigo de backup) pra concluir um login pendente de 2FA. */
-function attempt_2fa(string $code): bool {
+/** Sessão nova + CSRF novo ao virar usuário autenticado. */
+function complete_login(int $userId): void {
+    session_regenerate_id(true);
+    unset($_SESSION['csrf']);
+    $_SESSION['user_id'] = $userId;
+}
+
+/**
+ * Confere o codigo TOTP (ou um codigo de backup) pra concluir um login
+ * pendente de 2FA. Retorna 'ok' | 'locked' | 'invalid'. Tentativas erradas
+ * contam no mesmo lockout por IP do login com senha — sem isso daria pra
+ * forçar o codigo de 6 digitos na base da repetição.
+ */
+function attempt_2fa(string $code): string {
     $uid = $_SESSION['pending_2fa_user_id'] ?? null;
-    if ($uid === null) return false;
+    if ($uid === null) return 'invalid';
+    if (is_locked_out()) return 'locked';
 
     $db = get_db();
     $stmt = $db->prepare('SELECT totp_secret FROM users WHERE id = ?');
     $stmt->execute([$uid]);
     $user = $stmt->fetch();
-    if (!$user || !$user['totp_secret']) return false;
+    if (!$user || !$user['totp_secret']) return 'invalid';
 
     if (totp_verify_code($user['totp_secret'], $code)) {
         unset($_SESSION['pending_2fa_user_id']);
-        session_regenerate_id(true);
-        $_SESSION['user_id'] = (int)$uid;
-        return true;
+        reset_attempts();
+        complete_login((int)$uid);
+        return 'ok';
     }
 
     $stmt = $db->prepare('SELECT id, code_hash FROM totp_backup_codes WHERE user_id = ? AND used_at IS NULL');
@@ -143,12 +167,13 @@ function attempt_2fa(string $code): bool {
         if (password_verify(trim($code), $row['code_hash'])) {
             $db->prepare('UPDATE totp_backup_codes SET used_at = NOW() WHERE id = ?')->execute([$row['id']]);
             unset($_SESSION['pending_2fa_user_id']);
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = (int)$uid;
-            return true;
+            reset_attempts();
+            complete_login((int)$uid);
+            return 'ok';
         }
     }
-    return false;
+    record_failed_attempt();
+    return 'invalid';
 }
 
 function is_register_locked_out(): bool {

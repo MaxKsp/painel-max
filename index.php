@@ -700,6 +700,7 @@ function monthKey(d){ d = d||new Date(); return d.getFullYear()+'-'+pad(d.getMon
 function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 function minToTime(m){ m=((m%1440)+1440)%1440; return pad(Math.floor(m/60))+':'+pad(m%60); }
 function fmtMoney(v){ return 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function genId(){ return 't' + Date.now() + Math.random().toString(36).slice(2,7); }
 function dnum(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
 function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
@@ -1047,7 +1048,7 @@ async function renderAgendaList(){
     const endTime = minToTime(timeToMin(t.time)+t.duration);
     return `<div class="taskcard cat-${t.cat} ${isDone?'done':''}" data-id="${t.id}">
       <div class="dot"></div>
-      <div class="info"><div class="ttl">${t.title}</div><div class="tm">${t.time}–${endTime}</div></div>
+      <div class="info"><div class="ttl">${esc(t.title)}</div><div class="tm">${t.time}–${endTime}</div></div>
       <button class="del" data-id="${t.id}">✕</button>
     </div>`;
   }).join('');
@@ -1551,7 +1552,7 @@ async function renderFinance(){
           : bankById(a.bank).name;
         return `<div class="acccard" data-id="${a.id}">
           ${bankAvatarHtml(a.bank)}
-          <div class="info"><div class="ttl">${a.label} ${a.principal?'<span class="badge b-principal">Principal</span>':''}</div>
+          <div class="info"><div class="ttl">${esc(a.label)} ${a.principal?'<span class="badge b-principal">Principal</span>':''}</div>
             <div class="sub">${subHtml}</div>
           </div>
           ${valHtml}
@@ -1580,7 +1581,7 @@ async function renderFinance(){
         const regDate = l.createdAt ? new Date(l.createdAt).toLocaleDateString('pt-BR') : '';
         return `<div class="inccard ${!active?'inactive':''}" data-id="${l.id}">
           <div class="typedot b-${l.type}"></div>
-          <div class="info"><div class="ttl">${l.label}</div><div class="sub ${!active?'expired':''}">${sub}${regDate?' · cadastrada em '+regDate:''}</div></div>
+          <div class="info"><div class="ttl">${esc(l.label)}</div><div class="sub ${!active?'expired':''}">${sub}${regDate?' · cadastrada em '+regDate:''}</div></div>
           <div class="val">${fmtMoney(l.value)}</div>
         </div>`;
       }).join('');
@@ -1616,7 +1617,7 @@ async function renderFinance(){
         const recBadge = e.recorrencia==='mensal' ? '<span class="badge b-fixa">Mensal</span>' : '';
         return `<div class="expcard" data-id="${e.id}">
           ${bankAvatarHtml(e.bank)}
-          <div class="info"><div class="ttl">${e.label}</div>
+          <div class="info"><div class="ttl">${esc(e.label)}</div>
             <div class="metarow"><span class="badge">${dateDisp}</span>${recBadge}<span class="badge">${CATEGORIA_LABEL[e.categoria]||'Outros'}</span><span class="badge">${METHODS[e.method]}</span><span class="badge">${bank.name}</span></div>
           </div>
           <div class="val">${fmtMoney(e.value)}</div>

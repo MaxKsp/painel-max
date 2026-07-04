@@ -101,12 +101,12 @@ if (!$user) {
     $totpEnabled = (int)$user['totp_enabled'] === 1;
 }
 
-session_regenerate_id(true);
 if ($totpEnabled) {
+    session_regenerate_id(true);
     $_SESSION['pending_2fa_user_id'] = $userId;
     header('Location: login.php');
 } else {
-    $_SESSION['user_id'] = $userId;
+    complete_login($userId);
     header('Location: index.php');
 }
 exit;

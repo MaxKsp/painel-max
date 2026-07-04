@@ -8,7 +8,9 @@ if (current_user_id() !== null) {
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (is_register_locked_out()) {
+    if (!csrf_form_ok()) {
+        $error = 'Sessão expirada. Tente de novo.';
+    } elseif (is_register_locked_out()) {
         $error = 'Muitos cadastros a partir do seu IP. Tente novamente mais tarde.';
     } else {
         $username = trim((string)($_POST['username'] ?? ''));
@@ -16,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = (string)($_POST['password'] ?? '');
         $confirm = (string)($_POST['confirm'] ?? '');
 
-        if ($username === '' || mb_strlen($username) < 3 || mb_strlen($username) > 64) {
-            $error = 'Usuário precisa ter entre 3 e 64 caracteres.';
+        if (!preg_match('/^[a-zA-Z0-9._-]{3,64}$/', $username)) {
+            $error = 'Usuário precisa ter de 3 a 64 caracteres: letras, números, ponto, hífen ou underline.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'E-mail inválido.';
         } elseif (mb_strlen($password) < 8) {
@@ -42,8 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 @mail($email, 'Confirme seu e-mail — Painel Max', "Clique para confirmar seu e-mail:\n\n$verifyUrl\n\nSe você não criou essa conta, ignore este e-mail.");
 
                 reset_attempts();
-                session_regenerate_id(true);
-                $_SESSION['user_id'] = $userId;
+                complete_login($userId);
                 header('Location: index.php');
                 exit;
             }
@@ -78,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
   <form class="card" method="POST" autocomplete="off">
+    <?= csrf_field() ?>
     <h1>Criar conta</h1>
     <p class="sub">Cadastre-se pra usar o Painel Max.</p>
     <?php if ($error): ?><div class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
