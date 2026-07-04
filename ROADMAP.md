@@ -10,6 +10,9 @@ Backlog organizado por prioridade. Cada item deve virar uma branch
 - [x] **Sair do artefato do Claude / persistência real** — trocado
       `window.storage` por backend próprio em PHP + MySQL, hospedado na
       Hostinger, atrás de login com sessão, CSRF e rate-limit.
+- [x] **Performance ao trocar de aba** — front-end carregava cada chave com
+      um request HTTP separado (4-8 por troca de aba). Agora carrega tudo de
+      uma vez no login (`api/data.php?all=1`) e mantém em cache em memória.
 
 ## 🟠 Funcionalidade importante
 
@@ -36,10 +39,17 @@ Backlog organizado por prioridade. Cada item deve virar uma branch
 - [ ] **Separar `index.php` em arquivos** (`style.css`, `app.js`) — hoje
       tudo está num arquivo só; bom pra simplicidade, ruim pra diffs de PR
       conforme o projeto cresce.
-- [ ] **2FA (TOTP) no login** — camada extra de segurança além de
-      usuário/senha, se quiser reforçar ainda mais o acesso.
-- [ ] **Login com Google** — trocar o login usuário/senha único por OAuth,
-      caso vire multiusuário no futuro.
+- [x] **Multiusuário com cadastro por e-mail** — `register.php`, cada
+      usuário só vê seus próprios dados.
+- [x] **2FA (TOTP) no login** — ativa/desativa em Configurações → Segurança,
+      com QR code local e códigos de backup.
+- [x] **Login com Google** — precisa configurar `GOOGLE_CLIENT_ID`/
+      `GOOGLE_CLIENT_SECRET` no `config.php` (ver README).
+- [ ] **Recuperação de senha por e-mail** — fica pra quando houver domínio
+      próprio conectado (e-mail não é confiável no domínio temporário da
+      Hostinger).
+- [ ] **Endurecer verificação de e-mail** — hoje é só um selo (não bloqueia
+      login); revisar quando o e-mail for confiável.
 
 ## Convenção de commits
 

@@ -1,10 +1,43 @@
 -- Rode este script uma vez no phpMyAdmin do banco criado no hPanel da Hostinger.
+-- Se as tabelas ja existem de uma instalacao anterior, rode so os blocos
+-- "ALTER TABLE" abaixo que ainda nao foram aplicados (o phpMyAdmin avisa
+-- se uma coluna ja existir).
 
 CREATE TABLE IF NOT EXISTS users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(64) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NULL,
+  email VARCHAR(255) NULL UNIQUE,
+  email_verified_at TIMESTAMP NULL,
+  email_verify_token VARCHAR(64) NULL,
+  google_id VARCHAR(64) NULL UNIQUE,
+  totp_secret VARCHAR(64) NULL,
+  totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rode isto se a tabela "users" ja existia antes (instalacao anterior sem
+-- multiusuario/2FA/Google):
+-- ALTER TABLE users MODIFY password_hash VARCHAR(255) NULL;
+-- ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL UNIQUE;
+-- ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP NULL;
+-- ALTER TABLE users ADD COLUMN email_verify_token VARCHAR(64) NULL;
+-- ALTER TABLE users ADD COLUMN google_id VARCHAR(64) NULL UNIQUE;
+-- ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64) NULL;
+-- ALTER TABLE users ADD COLUMN totp_enabled TINYINT(1) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS register_attempts (
+  ip VARCHAR(45) NOT NULL PRIMARY KEY,
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  locked_until DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS totp_backup_codes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  used_at TIMESTAMP NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS kv_store (

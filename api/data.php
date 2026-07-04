@@ -9,6 +9,17 @@ $db = get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
+    if (isset($_GET['all'])) {
+        $stmt = $db->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ?');
+        $stmt->execute([$uid]);
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $out[$row['data_key']] = json_decode($row['data_value']);
+        }
+        echo json_encode($out);
+        exit;
+    }
+
     $key = (string)($_GET['key'] ?? '');
     if ($key === '') {
         http_response_code(400);

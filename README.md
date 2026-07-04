@@ -22,24 +22,35 @@ ao lado do `index.php` (já vem inclusa neste repositório).
 ## Estrutura
 
 ```
-index.php            – app inteiro (HTML + CSS + JS em um arquivo só, atrás de login)
-login.php/logout.php – autenticação por sessão
-auth.php              – helpers de sessão, CSRF e rate-limit de login
-db.php/config.php     – conexão MySQL (config.php não vai pro git)
-schema.sql            – criação das tabelas (rodar uma vez no phpMyAdmin)
-api/data.php          – get/set de chave-valor usado pelo front-end
-api/export.php        – gera o backup em JSON
-api/import.php        – restaura um backup em JSON
-assets/bancos/*.svg    – logos dos bancos usados no seletor de conta/despesa
-ROADMAP.md             – backlog priorizado de melhorias
+index.php               – app inteiro (HTML + CSS + JS em um arquivo só, atrás de login)
+login.php/logout.php    – autenticação por sessão (senha, 2FA, botão Google)
+register.php            – cadastro de novos usuários (multiusuário)
+verify-email.php        – confirmação de e-mail (best-effort, ver nota abaixo)
+auth.php                – helpers de sessão, CSRF, rate-limit e 2FA
+totp.php                – implementação do TOTP (RFC 6238) em PHP puro, sem libs
+auth-google-start.php    – inicia o login OAuth com Google
+auth-google-callback.php – recebe o retorno do Google e cria/loga o usuário
+db.php/config.php        – conexão MySQL (config.php não vai pro git)
+schema.sql               – criação/atualização das tabelas (rodar no phpMyAdmin)
+api/data.php             – get/set de chave-valor usado pelo front-end (com bootstrap ?all=1)
+api/export.php           – gera o backup em JSON
+api/import.php           – restaura um backup em JSON
+api/me.php               – dados básicos do usuário logado (usado pela tela de Segurança)
+api/totp-*.php           – ativar/confirmar/desativar 2FA
+assets/bancos/*.svg      – logos dos bancos usados no seletor de conta/despesa
+assets/qrcode.min.js     – lib de QR code vendorizada (gera o QR do 2FA sem depender de serviço externo)
+ROADMAP.md               – backlog priorizado de melhorias
 ```
 
 ## Stack
 
 - Vanilla JS, sem framework, + [Chart.js](https://www.chartjs.org/) via CDN
 - Backend: PHP + MySQL (PDO, prepared statements)
-- Sessão com senha com hash, CSRF token e rate-limit de login
-- Persistência: tabela `kv_store` no MySQL, uma linha por chave usada pelo front-end
+- Multiusuário: cada usuário só enxerga seus próprios dados (`kv_store` particionado por `user_id`)
+- Login: senha com hash, 2FA (TOTP + códigos de backup), login com Google (OAuth), CSRF token e rate-limit
+- Persistência: tabela `kv_store` no MySQL, uma linha por chave usada pelo front-end. O front-end carrega
+  tudo de uma vez no login (`api/data.php?all=1`) e mantém em cache em memória — trocar de aba não faz
+  requisição nova, só escrever dado de fato.
 
 ## Deploy na Hostinger
 
@@ -53,6 +64,13 @@ ROADMAP.md             – backlog priorizado de melhorias
    preencha. Esse arquivo nunca é commitado nem enviado pelo deploy
    automático, então essa etapa só precisa ser feita uma vez.
 4. Confirme que o SSL grátis da Hostinger está ativo — o `.htaccess` força HTTPS.
+
+**Atualizando uma instalação que já existia antes do multiusuário/2FA/Google**:
+o `schema.sql` só cria tabelas que não existem (`CREATE TABLE IF NOT EXISTS`),
+então num banco que já tinha a tabela `users` da versão anterior, as colunas
+novas (`email`, `google_id`, `totp_secret`, etc.) não aparecem sozinhas —
+rode os comandos `ALTER TABLE` comentados no final de cada bloco do
+`schema.sql` pra atualizar.
 
 ### Deploy automático (a cada push na `master`)
 
@@ -73,6 +91,40 @@ no GitHub:
 | `FTP_SERVER_DIR`  | Pasta de destino, normalmente `/public_html/`              |
 
 Depois disso, `git push` na `master` já publica direto no site.
+
+## Login com Google
+
+Pra habilitar o botão "Entrar com Google":
+
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie
+   um projeto novo (ou use um existente).
+2. Vá em **APIs e serviços → Tela de consentimento OAuth**, escolha
+   "Externo", preencha nome do app/e-mail de suporte e publique (pode ficar
+   em modo "Teste" enquanto for só você usando).
+3. Vá em **APIs e serviços → Credenciais → Criar credenciais → ID do cliente
+   OAuth**, tipo **Aplicativo da Web**.
+4. Em **URIs de redirecionamento autorizados**, adicione:
+   `https://SEU-DOMINIO/auth-google-callback.php`
+5. Copie o **Client ID** e o **Client Secret** gerados e cole no `config.php`
+   do servidor:
+   ```php
+   define('GOOGLE_CLIENT_ID', 'xxxxxxxx.apps.googleusercontent.com');
+   define('GOOGLE_CLIENT_SECRET', 'xxxxxxxx');
+   ```
+
+**Atenção**: se o domínio do site mudar depois (ex: sair do
+`.hostingersite.com` temporário pra um domínio próprio), a URI de
+redirecionamento precisa ser atualizada no passo 4 também, senão o login
+com Google para de funcionar.
+
+## E-mail (cadastro e verificação)
+
+O cadastro em `register.php` pede um e-mail e tenta mandar uma mensagem de
+confirmação via `mail()` nativo do PHP. Enquanto o site estiver no domínio
+temporário da Hostinger, essa entrega **não é confiável** (pode cair em
+spam ou nem sair) — por isso a verificação é só um selo extra, não bloqueia
+o cadastro nem o login. Recuperação de senha por e-mail ainda não existe;
+fica pro próximo ciclo, quando houver um domínio próprio conectado.
 
 ## Backup
 

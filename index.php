@@ -596,6 +596,26 @@ require_login_page();
       <button class="btn-ghost" id="btnImportBackup" style="width:100%;">Restaurar backup</button>
       <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
     </div>
+    <div class="field">
+      <label>Segurança (2FA)</label>
+      <div id="totpStatus" style="font-size:13px;color:var(--text-2);margin-bottom:8px;">Carregando...</div>
+      <button class="btn-ghost" id="btnEnable2fa" style="width:100%;display:none;">Ativar 2FA</button>
+      <div id="totpEnrollBox" style="display:none;">
+        <div id="totpQr" style="display:flex;justify-content:center;margin:12px 0;"></div>
+        <div style="font-size:12px;color:var(--text-2);text-align:center;margin-bottom:12px;word-break:break-all;">Chave manual: <code id="totpManualKey"></code></div>
+        <input type="text" id="totpCode" placeholder="Código de 6 dígitos" inputmode="numeric" style="margin-bottom:8px;">
+        <button class="btn-primary" id="btnConfirm2fa" style="width:100%;">Confirmar ativação</button>
+      </div>
+      <div id="totpBackupCodesBox" style="display:none;">
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Guarde esses códigos — cada um só funciona uma vez, caso você perca acesso ao app autenticador:</div>
+        <div id="totpBackupCodesList" style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.8;"></div>
+      </div>
+      <button class="btn-ghost" id="btnDisable2fa" style="width:100%;display:none;color:var(--brick);border-color:var(--brick);">Desativar 2FA</button>
+      <div id="totpDisableBox" style="display:none;">
+        <input type="password" id="totpDisablePassword" placeholder="Confirme sua senha" style="margin-bottom:8px;">
+        <button class="btn-ghost" id="btnConfirmDisable2fa" style="width:100%;color:var(--brick);border-color:var(--brick);">Confirmar desativação</button>
+      </div>
+    </div>
     <div class="field" id="settingsMsg" style="display:none;font-size:12px;color:var(--sage);"></div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btnLogout" style="margin-right:auto;color:var(--brick);border-color:var(--brick);">Sair</button>
@@ -605,6 +625,7 @@ require_login_page();
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="assets/qrcode.min.js"></script>
 <script>
 const CATS = { treino:'Treino', trabalho:'Trabalho', estudo:'Estudo', ifood:'iFood', descanso:'Descanso', deslocamento:'Deslocamento' };
 const BANKS = [
@@ -683,16 +704,22 @@ function dnum(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
 function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
 function startOfWeek(d){ const r=new Date(d); r.setDate(r.getDate()-r.getDay()); r.setHours(0,0,0,0); return r; }
 
-async function storeGet(key, fallback){
+let __cache = null;
+const __bootstrap = (async ()=>{
   try{
-    const r = await fetch('api/data.php?key=' + encodeURIComponent(key));
-    if (r.status === 401){ location.href = 'login.php'; return fallback; }
-    if (!r.ok) return fallback;
-    const j = await r.json();
-    return (j.value === null || j.value === undefined) ? fallback : j.value;
-  } catch(e){ return fallback; }
+    const r = await fetch('api/data.php?all=1');
+    if (r.status === 401){ location.href = 'login.php'; return; }
+    __cache = r.ok ? await r.json() : {};
+  } catch(e){ __cache = {}; }
+})();
+async function storeGet(key, fallback){
+  await __bootstrap;
+  if (!__cache || !(key in __cache) || __cache[key] === null || __cache[key] === undefined) return fallback;
+  return __cache[key];
 }
 async function storeSet(key, value){
+  await __bootstrap;
+  if (__cache) __cache[key] = value;
   try{
     const r = await fetch('api/data.php', {
       method: 'POST',
@@ -1724,7 +1751,11 @@ function showSettingsMsg(text, isError){
 }
 document.getElementById('btnSettings').onclick = ()=>{
   settingsMsg.style.display = 'none';
+  document.getElementById('totpEnrollBox').style.display = 'none';
+  document.getElementById('totpBackupCodesBox').style.display = 'none';
+  document.getElementById('totpDisableBox').style.display = 'none';
   settingsModalOverlay.classList.add('open');
+  refreshTotpStatus();
 };
 document.getElementById('settingsClose').onclick = ()=> settingsModalOverlay.classList.remove('open');
 document.getElementById('btnLogout').onclick = ()=>{ location.href = 'logout.php'; };
@@ -1758,6 +1789,81 @@ document.getElementById('importBackupFile').onchange = async (ev)=>{
     showSettingsMsg('Backup restaurado. Recarregando...', false);
     setTimeout(()=> location.reload(), 1200);
   } catch(e){ showSettingsMsg('Arquivo inválido ou falha ao restaurar.', true); }
+};
+
+async function refreshTotpStatus(){
+  const statusEl = document.getElementById('totpStatus');
+  const btnEnable = document.getElementById('btnEnable2fa');
+  const btnDisable = document.getElementById('btnDisable2fa');
+  try{
+    const r = await fetch('api/me.php');
+    if (!r.ok) throw new Error('me failed');
+    const me = await r.json();
+    if (me.totp_enabled){
+      statusEl.textContent = 'Ativado';
+      btnDisable.style.display = '';
+      btnEnable.style.display = 'none';
+    } else {
+      statusEl.textContent = 'Desativado';
+      btnEnable.style.display = '';
+      btnDisable.style.display = 'none';
+    }
+  } catch(e){ statusEl.textContent = 'Não consegui checar o status agora.'; }
+}
+
+document.getElementById('btnEnable2fa').onclick = async ()=>{
+  try{
+    const r = await fetch('api/totp-enroll.php', { method:'POST', headers:{'X-CSRF-Token': window.CSRF_TOKEN} });
+    if (!r.ok) throw new Error('enroll failed');
+    const j = await r.json();
+    document.getElementById('totpManualKey').textContent = j.secret;
+    const qrBox = document.getElementById('totpQr');
+    qrBox.innerHTML = '';
+    new QRCode(qrBox, { text: j.otpauth_uri, width: 180, height: 180 });
+    document.getElementById('totpCode').value = '';
+    document.getElementById('totpEnrollBox').style.display = 'block';
+    document.getElementById('btnEnable2fa').style.display = 'none';
+  } catch(e){ showSettingsMsg('Não consegui iniciar a ativação do 2FA.', true); }
+};
+
+document.getElementById('btnConfirm2fa').onclick = async ()=>{
+  const code = document.getElementById('totpCode').value.trim();
+  try{
+    const r = await fetch('api/totp-confirm.php', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRF-Token': window.CSRF_TOKEN},
+      body: JSON.stringify({ code })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'confirm failed');
+    document.getElementById('totpEnrollBox').style.display = 'none';
+    document.getElementById('totpBackupCodesList').innerHTML = j.backup_codes.map(c=>`<div>${c}</div>`).join('');
+    document.getElementById('totpBackupCodesBox').style.display = 'block';
+    showSettingsMsg('2FA ativado com sucesso.', false);
+    refreshTotpStatus();
+  } catch(e){ showSettingsMsg('Código inválido, tenta de novo.', true); }
+};
+
+document.getElementById('btnDisable2fa').onclick = ()=>{
+  document.getElementById('totpDisablePassword').value = '';
+  document.getElementById('totpDisableBox').style.display = 'block';
+  document.getElementById('btnDisable2fa').style.display = 'none';
+};
+
+document.getElementById('btnConfirmDisable2fa').onclick = async ()=>{
+  const password = document.getElementById('totpDisablePassword').value;
+  try{
+    const r = await fetch('api/totp-disable.php', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRF-Token': window.CSRF_TOKEN},
+      body: JSON.stringify({ password })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'disable failed');
+    document.getElementById('totpDisableBox').style.display = 'none';
+    showSettingsMsg('2FA desativado.', false);
+    refreshTotpStatus();
+  } catch(e){ showSettingsMsg('Senha incorreta ou falha ao desativar.', true); }
 };
 
 async function init(){
