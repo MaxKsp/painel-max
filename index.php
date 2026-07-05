@@ -530,6 +530,11 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
           <div class="dashcard-sub">Onde o dinheiro mais sai — moradia, alimentação, lazer etc.</div>
           <div class="dashcanvas-wrap" id="wrapCategoria"><canvas id="chartCategoria"></canvas></div>
         </div>
+        <div class="dashcard">
+          <div class="dashcard-title">Histórico mensal</div>
+          <div class="dashcard-sub">Entradas × saídas dos últimos 6 meses, calculado dos seus lançamentos.</div>
+          <div class="dashcanvas-wrap" id="wrapHistory"><canvas id="chartHistory"></canvas></div>
+        </div>
         <div class="dashcard" id="cardLine" style="display:none;">
           <div class="dashcard-title">Renda variável ao longo do tempo</div>
           <div class="dashcard-sub" id="lineSub">Ganhos lançados por dia, últimos 30 dias.</div>
@@ -724,6 +729,11 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
     <div class="field" style="display:flex;align-items:center;gap:8px;">
       <input type="checkbox" id="emRecorrente" style="width:auto;">
       <label style="margin:0;text-transform:none;font-family:'Archivo',sans-serif;font-size:13px;color:var(--text);">Repete todo mês (mesmo dia)</label>
+    </div>
+    <div class="field">
+      <label>Movimentar conta (opcional)</label>
+      <select id="emAccount"><option value="">Não movimentar nenhuma conta</option></select>
+      <div id="emAccountHint" style="font-size:11.5px;color:var(--text-3);margin-top:4px;">Conta: desconta do saldo · Cartão: soma na fatura. Indisponível pra despesa recorrente.</div>
     </div>
     <div class="field"><label>Categoria</label>
       <select id="emCategoria">
@@ -1447,7 +1457,32 @@ function openIncomeEdit(line){
 
 /* ---- Modal de despesa (novo / editar) ---- */
 let editingExpenseId = null;
-document.getElementById('btnOpenExpModal').onclick = ()=>{
+
+async function fillAccountSelect(selectedId){
+  const accounts = await getAccounts();
+  const sel = document.getElementById('emAccount');
+  sel.innerHTML = '<option value="">Não movimentar nenhuma conta</option>' +
+    accounts.map(a=>`<option value="${a.id}">${esc(a.label)}${a.tipo==='cartao'?' (cartão)':''}</option>`).join('');
+  sel.value = selectedId || '';
+  syncAccountSelectState();
+}
+function syncAccountSelectState(){
+  const rec = document.getElementById('emRecorrente').checked;
+  const sel = document.getElementById('emAccount');
+  sel.disabled = rec;
+  if (rec) sel.value = '';
+}
+document.getElementById('emRecorrente').onchange = syncAccountSelectState;
+
+/** sign +1 aplica a despesa na conta (debita saldo / soma fatura); -1 estorna. */
+function applyAccountMovement(accounts, accountId, value, sign){
+  const a = accounts.find(x=>x.id===accountId);
+  if (!a) return;
+  if (a.tipo==='cartao') a.fatura = Number(a.fatura||0) + sign*value;
+  else a.saldo = Number(a.saldo||0) - sign*value;
+}
+
+document.getElementById('btnOpenExpModal').onclick = async ()=>{
   editingExpenseId = null;
   document.getElementById('expenseModalTitle').textContent = 'Nova despesa';
   document.getElementById('emLabel').value = '';
@@ -1461,6 +1496,7 @@ document.getElementById('btnOpenExpModal').onclick = ()=>{
   document.getElementById('emBank').value = 'outro';
   renderBankPicker('emBankPicker', 'emBank', 'outro');
   document.getElementById('emDelete').style.display = 'none';
+  await fillAccountSelect('');
   document.getElementById('expenseModalOverlay').classList.add('open');
 };
 document.getElementById('emCancel').onclick = ()=> document.getElementById('expenseModalOverlay').classList.remove('open');
@@ -1474,13 +1510,30 @@ document.getElementById('emSave').onclick = async ()=>{
   const categoria = document.getElementById('emCategoria').value;
   const method = document.getElementById('emMethod').value;
   const bank = document.getElementById('emBank').value;
+  const accountId = recorrencia==='none' ? (document.getElementById('emAccount').value || null) : null;
   let lines = await getExpenseLines();
+  const accounts = await getAccounts();
+  let accountsTouched = false;
   if (editingExpenseId){
     const l = lines.find(x=>x.id===editingExpenseId);
-    if (l){ l.label=label; l.value=value; l.date=date; l.time=time; l.recorrencia=recorrencia; l.categoria=categoria; l.method=method; l.bank=bank; }
+    if (l){
+      // se mudou a conta ou o valor: estorna o movimento antigo e aplica o novo
+      const movementChanged = (l.accountId||null)!==accountId || Number(l.value||0)!==value;
+      if (movementChanged){
+        if (l.accountId){ applyAccountMovement(accounts, l.accountId, Number(l.value||0), -1); accountsTouched = true; }
+        if (accountId){ applyAccountMovement(accounts, accountId, value, +1); accountsTouched = true; }
+      }
+      l.label=label; l.value=value; l.date=date; l.time=time; l.recorrencia=recorrencia;
+      l.categoria=categoria; l.method=method; l.bank=bank; l.accountId=accountId;
+    }
   } else {
-    lines.push({ id: genId(), label, value, date, time, recorrencia, categoria, method, bank, createdAt: Date.now() });
+    if (accountId){
+      applyAccountMovement(accounts, accountId, value, +1);
+      accountsTouched = true;
+    }
+    lines.push({ id: genId(), label, value, date, time, recorrencia, categoria, method, bank, accountId, createdAt: Date.now() });
   }
+  if (accountsTouched) await storeSet('accounts_v2', accounts);
   await storeSet('expense_lines_v4', lines);
   document.getElementById('expenseModalOverlay').classList.remove('open');
   renderFinance();
@@ -1488,6 +1541,12 @@ document.getElementById('emSave').onclick = async ()=>{
 document.getElementById('emDelete').onclick = async ()=>{
   if (!editingExpenseId) return;
   let lines = await getExpenseLines();
+  const line = lines.find(l=>l.id===editingExpenseId);
+  if (line && line.accountId){
+    const accounts = await getAccounts();
+    applyAccountMovement(accounts, line.accountId, Number(line.value||0), -1);
+    await storeSet('accounts_v2', accounts);
+  }
   lines = lines.filter(l=>l.id!==editingExpenseId);
   await storeSet('expense_lines_v4', lines);
   document.getElementById('expenseModalOverlay').classList.remove('open');
@@ -1507,6 +1566,7 @@ function openExpenseEdit(line){
   document.getElementById('emBank').value = line.bank;
   renderBankPicker('emBankPicker', 'emBank', line.bank);
   document.getElementById('emDelete').style.display = '';
+  fillAccountSelect(line.accountId || '');
   document.getElementById('expenseModalOverlay').classList.add('open');
 }
 
@@ -1920,7 +1980,7 @@ async function renderFinance(){
 document.getElementById('expSearch').oninput = ()=> renderFinance();
 document.getElementById('incSearch').oninput = ()=> renderFinance();
 
-let chartLine=null, chartBank=null, chartMethod=null, chartCategoria=null;
+let chartLine=null, chartBank=null, chartMethod=null, chartCategoria=null, chartHistory=null;
 function chartAccent(){ return accentHex(); }
 
 const WEEKDAY_MIN = ['D','S','T','Q','Q','S','S'];
@@ -2050,6 +2110,7 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
   if (chartBank) { chartBank.destroy(); chartBank=null; }
   if (chartMethod) { chartMethod.destroy(); chartMethod=null; }
   if (chartCategoria) { chartCategoria.destroy(); chartCategoria=null; }
+  if (chartHistory) { chartHistory.destroy(); chartHistory=null; }
 
   const wrapBank = document.getElementById('wrapBank');
   const byBank = bucketPeriodTotals(expLines, aggRange, period, e=>e.bank, now);
@@ -2099,6 +2160,39 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
       });
     } catch(err){ console.error('chartCategoria falhou', err); wrapCategoria.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
   }
+
+  // histórico mensal: entradas x saídas dos últimos 6 meses, direto dos lançamentos
+  const wrapHistory = document.getElementById('wrapHistory');
+  try {
+    wrapHistory.innerHTML = '<canvas id="chartHistory"></canvas>';
+    const months = [];
+    for (let i=5;i>=0;i--) months.push(new Date(now.getFullYear(), now.getMonth()-i, 1));
+    const labels = months.map(d=>MONTH_ABBR[d.getMonth()] + (d.getFullYear()!==now.getFullYear() ? '/'+String(d.getFullYear()).slice(2) : ''));
+    const saidasSerie = months.map(m=>{
+      const r = { start: m, end: new Date(m.getFullYear(), m.getMonth()+1, 0) };
+      const dated = expLines.filter(e=>e.date).reduce((s2,e)=>s2+expenseTotalInRange(e, r),0);
+      const undated = expLines.filter(e=>!e.date && (!e.createdAt || e.createdAt <= r.end.getTime()+86399999)).reduce((s2,e)=>s2+Number(e.value||0),0);
+      return dated + undated;
+    });
+    const entradasSerie = months.map(m=>{
+      const r = { start: m, end: new Date(m.getFullYear(), m.getMonth()+1, 0) };
+      const fixas = incLines.filter(l=>{
+        if (l.createdAt && l.createdAt > r.end.getTime()+86399999) return false;
+        if (l.type==='temporaria' && l.endDate && dnum(new Date(l.endDate+'T00:00:00')) < dnum(r.start)) return false;
+        return true;
+      }).reduce((s2,l)=>s2+Number(l.value||0),0);
+      const variavel = entries.filter(e=>inRange(e.date, r)).reduce((s2,e)=>s2+Number(e.valor||0),0);
+      return fixas + variavel;
+    });
+    chartHistory = new Chart(document.getElementById('chartHistory'), {
+      type:'bar',
+      data:{ labels, datasets:[
+        { label:'Entradas', data: entradasSerie, backgroundColor:'#4FB07A', borderRadius:5, maxBarThickness:26 },
+        { label:'Saídas', data: saidasSerie, backgroundColor:'#E15C56', borderRadius:5, maxBarThickness:26 }
+      ]},
+      options: chartBaseOptions({ plugins:{ legend:{display:true, labels:{color:chartTickCol(), font:{size:10}, boxWidth:12}} } })
+    });
+  } catch(err){ console.error('chartHistory falhou', err); wrapHistory.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
 
   const cardLine = document.getElementById('cardLine');
   const hasVariableIncome = entries.length>0 || incLines.some(l=>l.type==='variavel');

@@ -5,7 +5,7 @@ require_once __DIR__ . '/../auth.php';
 
 $uid = require_login();
 session_write_close();
-$stmt = get_db()->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ?');
+$stmt = get_db()->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%'");
 $stmt->execute([$uid]);
 
 $out = [];

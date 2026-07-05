@@ -13,7 +13,7 @@ if ($method === 'GET') {
     // requisições paralelas do mesmo usuário.
     session_write_close();
     if (isset($_GET['all'])) {
-        $stmt = $db->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ?');
+        $stmt = $db->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%'");
         $stmt->execute([$uid]);
         $out = [];
         foreach ($stmt->fetchAll() as $row) {
