@@ -345,6 +345,40 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .field-row{display:flex;gap:10px;}
   .field-row .field{flex:1;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+  /* toasts */
+  #toastBox{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:92vw;}
+  .toast{pointer-events:auto;background:var(--surface-3);color:var(--text);border:1px solid var(--line-strong);border-radius:12px;padding:11px 16px;font-size:13px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-pop);animation:toastIn .2s ease-out;}
+  .toast.err{border-color:rgba(225,92,86,.45);}
+  .toast button{background:none;border:none;color:var(--accent);font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;padding:0;}
+  @keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  /* empty state com acao */
+  .empty-cta{display:flex;flex-direction:column;align-items:center;gap:12px;padding:26px 16px;text-align:center;}
+
+  /* FAB nova despesa */
+  #fabNew{position:fixed;right:22px;bottom:22px;z-index:45;width:54px;height:54px;border-radius:50%;border:none;background:var(--grad);color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 22px var(--glow);transition:transform .12s,filter .15s;}
+  #fabNew:hover{filter:brightness(1.1);}
+  #fabNew:active{transform:scale(.92);}
+
+  /* navegacao no polegar em telas pequenas */
+  @media (max-width:640px){
+    /* backdrop-filter na topbar criaria um containing block e prenderia o
+       position:fixed das tabs dentro dela — no mobile a topbar vira
+       estática e a navegação mora na barra de baixo */
+    .topbar{position:static;backdrop-filter:none;-webkit-backdrop-filter:none;background:transparent;border-bottom:none;}
+    .sectiontabs{
+      position:fixed;bottom:0;left:0;right:0;z-index:60;border-radius:0;border:none;border-top:1px solid var(--line);
+      background:color-mix(in srgb, var(--bg) 82%, transparent);
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      justify-content:space-around;padding:9px 12px calc(9px + env(safe-area-inset-bottom));
+    }
+    .sectiontab{width:46px;height:46px;}
+    .sectiontab svg{width:22px;height:22px;}
+    .sectiontab .tab-avatar{width:30px;height:30px;}
+    #fabNew{bottom:calc(78px + env(safe-area-inset-bottom));}
+    #toastBox{bottom:calc(84px + env(safe-area-inset-bottom));}
+  }
+
   /* metas por categoria */
   .goalrow{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;}
   .goalrow .toprow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
@@ -499,6 +533,7 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="fsub active" data-fsub="inicio">Início</div>
       <div class="fsub" data-fsub="entradas">Entradas</div>
       <div class="fsub" data-fsub="saidas">Saídas</div>
+      <div class="fsub" data-fsub="metas">Metas</div>
     </div>
 
     <div class="fpage active" id="fpage-inicio">
@@ -516,10 +551,6 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="dashcard-sub" style="margin:2px 0 4px;">Sem Open Finance ainda — você registra o saldo manualmente. Some todas as contas em uso.</div>
       <div id="accTotalLine" style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--sage);margin-bottom:12px;">R$ 0,00</div>
       <div id="accountLines"></div>
-
-      <div class="fpage-head"><h2 style="margin:26px 0 0;">Metas do mês</h2><button class="addbtn-sm" id="btnEditGoals" title="Editar metas">✎</button></div>
-      <div class="dashcard-sub" style="margin:2px 0 10px;">Limite de gasto por categoria. A barra mostra quanto do limite já foi usado neste mês.</div>
-      <div id="goalsList"></div>
 
       <div class="dashgrid">
         <div class="dashcard">
@@ -573,6 +604,12 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="fpage-head"><h2 style="margin:0;">Despesas</h2><button class="addbtn-sm" id="btnOpenExpModal">+</button></div>
       <input type="search" id="expSearch" placeholder="Buscar por nome, categoria ou banco..." style="width:100%;margin-bottom:10px;">
       <div id="expenseLines"></div>
+    </div>
+
+    <div class="fpage" id="fpage-metas">
+      <div class="fpage-head"><h2 style="margin:0;">Metas do mês</h2><button class="addbtn-sm" id="btnEditGoals" title="Editar metas">✎</button></div>
+      <div class="dashcard-sub" style="margin:2px 0 10px;">Limite de gasto por categoria. A barra mostra quanto do limite já foi usado neste mês — âmbar a partir de 80%, vermelho ao estourar.</div>
+      <div id="goalsList"></div>
     </div>
   </div>
 
@@ -812,6 +849,8 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   </div>
 </div>
 
+<button id="fabNew" title="Nova despesa">+</button>
+
 <div class="modal-overlay" id="goalsModalOverlay">
   <div class="modal">
     <h3>Metas de gasto por categoria</h3>
@@ -899,6 +938,31 @@ function monthKey(d){ d = d||new Date(); return d.getFullYear()+'-'+pad(d.getMon
 function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 function minToTime(m){ m=((m%1440)+1440)%1440; return pad(Math.floor(m/60))+':'+pad(m%60); }
 function fmtMoney(v){ return 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function toast(msg, opts){
+  opts = opts||{};
+  let box = document.getElementById('toastBox');
+  if (!box){ box = document.createElement('div'); box.id='toastBox'; document.body.appendChild(box); }
+  const el = document.createElement('div');
+  el.className = 'toast' + (opts.error?' err':'');
+  const span = document.createElement('span'); span.textContent = msg; el.appendChild(span);
+  if (opts.undo){
+    const b = document.createElement('button'); b.textContent = 'Desfazer';
+    b.onclick = ()=>{ el.remove(); opts.undo(); };
+    el.appendChild(b);
+  }
+  box.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .25s'; el.style.opacity='0'; setTimeout(()=>el.remove(), 260); }, opts.undo?8000:3500);
+}
+function emptyCta(msg, btnLabel, targetId){
+  return `<div class="empty empty-cta"><div>${msg}</div><button class="btn-primary" data-open="${targetId}">${btnLabel}</button></div>`;
+}
+function relDate(dateStr){
+  if (!dateStr) return 'sem data';
+  const today = dkey(new Date());
+  if (dateStr === today) return 'hoje';
+  if (dateStr === dkey(addDays(new Date(), -1))) return 'ontem';
+  return dateStr.split('-').reverse().join('/');
+}
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function genId(){ return 't' + Date.now() + Math.random().toString(36).slice(2,7); }
 function dnum(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
@@ -931,43 +995,13 @@ async function storeSet(key, value){
   } catch(e){ console.error(e); }
 }
 
-const SEED_TASKS = [
-  {title:'Acordar', time:'05:00', cat:'descanso', dow:'all'},
-  {title:'Deslocamento até a Blue Fit', time:'05:15', cat:'deslocamento', dow:'all'},
-  {title:'Treino', time:'05:30', cat:'treino', dow:'all'},
-  {title:'Banho na academia', time:'07:00', cat:'descanso', dow:'all'},
-  {title:'Deslocamento até a EZ Soft', time:'07:20', cat:'deslocamento', dow:'all'},
-  {title:'Trabalho (aproveitar ocioso p/ estudar)', time:'08:00', cat:'trabalho', dow:'all'},
-  {title:'Almoço - marmita LivUp', time:'12:00', cat:'descanso', dow:'all'},
-  {title:'Trabalho (aproveitar ocioso p/ estudar)', time:'13:00', cat:'trabalho', dow:'all'},
-  {title:'Levar a Laura pra academia', time:'17:30', cat:'deslocamento', dow:'all'},
-  {title:'Casa, jantar', time:'18:30', cat:'descanso', dow:1},
-  {title:'Descanso / lazer', time:'19:15', cat:'descanso', dow:1},
-  {title:'Dormir', time:'21:30', cat:'descanso', dow:1},
-  {title:'Casa, jantar rápido', time:'18:30', cat:'descanso', dow:[0,2,3,4,5,6]},
-  {title:'Pegar a bag e sair pro iFood', time:'19:15', cat:'ifood', dow:[0,2,3,4,5,6]},
-  {title:'Voltar pra casa', time:'23:00', cat:'deslocamento', dow:[0,2,3,4,5,6]},
-  {title:'Dormir', time:'23:30', cat:'descanso', dow:[0,2,3,4,5,6]},
-];
-
 let tasks = [];
 let checklist = {};
 
 async function ensureSeeded(){
-  const saved = await storeGet('tasks_v6', null);
-  if (saved) { tasks = saved; checklist = await storeGet('checklist_v6', {}); return; }
-  tasks = [];
-  const monday = startOfWeek(new Date());
-  SEED_TASKS.forEach(s=>{
-    const dows = s.dow==='all' ? [0,1,2,3,4,5,6] : (Array.isArray(s.dow)?s.dow:[s.dow]);
-    dows.forEach(dw=>{
-      const anchor = addDays(monday, dw);
-      tasks.push({ id: genId(), title:s.title, time:s.time, cat:s.cat, duration:45, date: dkey(anchor), recurrence:'weekly', weeksCount:0 });
-    });
-  });
-  await storeSet('tasks_v6', tasks);
-  checklist = {};
-  await storeSet('checklist_v6', checklist);
+  // conta nova começa vazia — cada usuário constrói a própria rotina
+  tasks = await storeGet('tasks_v6', []);
+  checklist = await storeGet('checklist_v6', {});
 }
 
 function isTaskOnDate(task, d){
@@ -1250,7 +1284,7 @@ async function renderAgendaList(){
   label.textContent = dnum(viewDate)===dnum(today) ? 'Hoje' : (WEEKDAY_ABBR[viewDate.getDay()] + ' · ' + viewDate.getDate() + ' ' + MONTH_ABBR[viewDate.getMonth()]);
   const dayTasks = tasksOnDate(viewDate);
   const box = document.getElementById('agendaList');
-  if (dayTasks.length===0){ box.innerHTML = '<div class="empty">Nenhuma tarefa nesse dia.</div>'; return; }
+  if (dayTasks.length===0){ box.innerHTML = emptyCta('Nenhuma tarefa nesse dia.', '+ Nova tarefa', 'btnNewTask'); return; }
   box.innerHTML = dayTasks.map(t=>{
     const isDone = !!checklist[occId(t,viewDate)];
     const endTime = minToTime(timeToMin(t.time)+t.duration);
@@ -1273,9 +1307,15 @@ async function renderAgendaList(){
   box.querySelectorAll('.del').forEach(btn=>{
     btn.onclick = async (e)=>{
       e.stopPropagation();
+      const removed = tasks.find(t=>t.id===btn.dataset.id);
       tasks = tasks.filter(t=>t.id!==btn.dataset.id);
       await storeSet('tasks_v6', tasks);
       renderAgenda();
+      toast('Tarefa excluída', { undo: async ()=>{
+        tasks.push(removed);
+        await storeSet('tasks_v6', tasks);
+        renderAgenda();
+      }});
     };
   });
 }
@@ -1350,6 +1390,7 @@ document.getElementById('btnSaveModal').onclick = async ()=>{
   await storeSet('tasks_v6', tasks);
   modalOverlay.classList.remove('open');
   renderAgenda();
+  toast('Tarefa criada');
 };
 
 document.querySelectorAll('.sectiontab').forEach(t=>{
@@ -1364,36 +1405,11 @@ document.querySelectorAll('.sectiontab').forEach(t=>{
   };
 });
 
-const DEFAULT_EXPENSES = [
-  {label:'Financiamento do apê', value:1400, method:'ted', bank:'outro', categoria:'financiamento', recorrencia:'mensal', dayOfMonth:15},
-  {label:'Marmitas LivUp', value:254.83, method:'pix', bank:'outro', categoria:'alimentacao', recorrencia:'mensal', dayOfMonth:20},
-];
 async function getExpenseLines(){
-  const saved = await storeGet('expense_lines_v4', null);
-  if (saved) return saved;
-  const today = new Date();
-  const seeded = DEFAULT_EXPENSES.map(e => {
-    const d = new Date(today.getFullYear(), today.getMonth(), e.dayOfMonth);
-    const { dayOfMonth, ...rest } = e;
-    return {...rest, id: genId(), createdAt: 0, date: dkey(d)};
-  });
-
-  await storeSet('expense_lines_v4', seeded);
-  return seeded;
-}
-function defaultIncomeSeed(){
-  const end = new Date(); end.setMonth(end.getMonth()+4);
-  return [
-    {label:'PJ — EZ Soft', value:3500, type:'fixa', endDate:null},
-    {label:'Seguro-desemprego', value:2200, type:'temporaria', endDate:dkey(end)},
-  ];
+  return await storeGet('expense_lines_v4', []);
 }
 async function getIncomeLines(){
-  const saved = await storeGet('income_lines', null);
-  if (saved) return saved;
-  const seeded = defaultIncomeSeed().map(e => ({...e, id: genId(), createdAt: 0}));
-  await storeSet('income_lines', seeded);
-  return seeded;
+  return await storeGet('income_lines', []);
 }
 function isIncomeActive(line, now){
   if (line.type !== 'temporaria') return true;
@@ -1446,14 +1462,22 @@ document.getElementById('imSave').onclick = async ()=>{
   await storeSet('income_lines', lines);
   document.getElementById('incomeModalOverlay').classList.remove('open');
   renderFinance();
+  toast(editingIncomeId ? 'Renda atualizada' : 'Renda cadastrada');
 };
 document.getElementById('imDelete').onclick = async ()=>{
   if (!editingIncomeId) return;
   let lines = await getIncomeLines();
+  const removed = lines.find(l=>l.id===editingIncomeId);
   lines = lines.filter(l=>l.id!==editingIncomeId);
   await storeSet('income_lines', lines);
   document.getElementById('incomeModalOverlay').classList.remove('open');
   renderFinance();
+  toast('Renda excluída', { undo: async ()=>{
+    const cur = await getIncomeLines();
+    cur.push(removed);
+    await storeSet('income_lines', cur);
+    renderFinance();
+  }});
 };
 function openIncomeEdit(line){
   editingIncomeId = line.id;
@@ -1549,20 +1573,32 @@ document.getElementById('emSave').onclick = async ()=>{
   await storeSet('expense_lines_v4', lines);
   document.getElementById('expenseModalOverlay').classList.remove('open');
   renderFinance();
+  toast(editingExpenseId ? 'Despesa atualizada' : 'Despesa registrada');
 };
 document.getElementById('emDelete').onclick = async ()=>{
   if (!editingExpenseId) return;
   let lines = await getExpenseLines();
-  const line = lines.find(l=>l.id===editingExpenseId);
-  if (line && line.accountId){
+  const removed = lines.find(l=>l.id===editingExpenseId);
+  if (removed && removed.accountId){
     const accounts = await getAccounts();
-    applyAccountMovement(accounts, line.accountId, Number(line.value||0), -1);
+    applyAccountMovement(accounts, removed.accountId, Number(removed.value||0), -1);
     await storeSet('accounts_v2', accounts);
   }
   lines = lines.filter(l=>l.id!==editingExpenseId);
   await storeSet('expense_lines_v4', lines);
   document.getElementById('expenseModalOverlay').classList.remove('open');
   renderFinance();
+  toast('Despesa excluída', { undo: async ()=>{
+    const cur = await getExpenseLines();
+    cur.push(removed);
+    if (removed.accountId){
+      const accounts = await getAccounts();
+      applyAccountMovement(accounts, removed.accountId, Number(removed.value||0), +1);
+      await storeSet('accounts_v2', accounts);
+    }
+    await storeSet('expense_lines_v4', cur);
+    renderFinance();
+  }});
 };
 function openExpenseEdit(line){
   editingExpenseId = line.id;
@@ -1585,11 +1621,7 @@ function openExpenseEdit(line){
 
 /* ---- Contas ---- */
 async function getAccounts(){
-  const saved = await storeGet('accounts_v2', null);
-  if (saved) return saved;
-  const seeded = [{ id: genId(), label:'Conta corrente', tipo:'conta', bank:'outro', saldo:0, limite:0, fatura:0, principal:true, createdAt:0 }];
-  await storeSet('accounts_v2', seeded);
-  return seeded;
+  return await storeGet('accounts_v2', []);
 }
 function toggleAccountFields(tipo){
   document.getElementById('acSaldoField').style.display = tipo==='cartao' ? 'none' : '';
@@ -1635,14 +1667,22 @@ document.getElementById('acSave').onclick = async ()=>{
   await storeSet('accounts_v2', accounts);
   document.getElementById('accountModalOverlay').classList.remove('open');
   renderFinance();
+  toast(editingAccountId ? 'Conta atualizada' : 'Conta criada');
 };
 document.getElementById('acDelete').onclick = async ()=>{
   if (!editingAccountId) return;
   let accounts = await getAccounts();
+  const removed = accounts.find(a=>a.id===editingAccountId);
   accounts = accounts.filter(a=>a.id!==editingAccountId);
   await storeSet('accounts_v2', accounts);
   document.getElementById('accountModalOverlay').classList.remove('open');
   renderFinance();
+  toast('Conta excluída', { undo: async ()=>{
+    const cur = await getAccounts();
+    cur.push(removed);
+    await storeSet('accounts_v2', cur);
+    renderFinance();
+  }});
 };
 function openAccountEdit(acc){
   editingAccountId = acc.id;
@@ -1806,7 +1846,7 @@ async function renderGoals(expLines, now){
   const goals = await storeGet('budget_goals', {});
   const keys = Object.keys(goals).filter(k=>Number(goals[k])>0);
   if (keys.length===0){
-    box.innerHTML = '<div class="empty">Nenhuma meta definida ainda — clique no lápis pra criar limites por categoria.</div>';
+    box.innerHTML = emptyCta('Defina limites de gasto por categoria e acompanhe o mês de perto.', '+ Definir metas', 'btnEditGoals');
     return;
   }
   const monthRange = clampRangeToToday(periodRange('month', now), now);
@@ -1839,6 +1879,7 @@ document.getElementById('goalsSave').onclick = async ()=>{
   await storeSet('budget_goals', goals);
   document.getElementById('goalsModalOverlay').classList.remove('open');
   renderFinance();
+  toast('Metas salvas');
 };
 
 async function renderFinance(){
@@ -1886,7 +1927,7 @@ async function renderFinance(){
       `<span style="color:var(--sage)">${fmtMoney(contasSaldo)}</span> em ${nContas} ${nContas===1?'conta':'contas'}` +
       (nCartoes>0 ? ` &nbsp;·&nbsp; <span style="color:var(--brick)">${fmtMoney(cartoesFatura)}</span> em fatura (${nCartoes} ${nCartoes===1?'cartão':'cartões'})` : '');
     const accBox = document.getElementById('accountLines');
-    if (accounts.length===0){ accBox.innerHTML = '<div class="empty">Nenhuma conta cadastrada.</div>'; }
+    if (accounts.length===0){ accBox.innerHTML = emptyCta('Cadastre suas contas e cartões pra acompanhar saldo e fatura.', '+ Adicionar conta', 'btnOpenAccModal'); }
     else {
       accBox.innerHTML = accounts.map(a=>{
         const isCartao = a.tipo==='cartao';
@@ -1909,8 +1950,11 @@ async function renderFinance(){
       });
     }
 
-    await renderGoals(expLines, now);
     renderDashCharts(entries, expLines, incLines, ifoodTotal, now, finPeriod, range, aggRange);
+  }
+
+  if (activePage === 'fpage-metas'){
+    await renderGoals(expLines, now);
   }
 
   if (activePage === 'fpage-entradas'){
@@ -1919,7 +1963,7 @@ async function renderFinance(){
     const incShown = incQ
       ? incLines.filter(l=> (l.label||'').toLowerCase().includes(incQ) || (TYPE_LABEL[l.type]||'').toLowerCase().includes(incQ))
       : incLines;
-    if (incLines.length===0){ incBox.innerHTML = '<div class="empty">Nenhuma renda cadastrada.</div>'; }
+    if (incLines.length===0){ incBox.innerHTML = emptyCta('Cadastre sua renda fixa ou temporária pro saldo fazer sentido.', '+ Cadastrar renda', 'btnOpenIncModal'); }
     else if (incShown.length===0){ incBox.innerHTML = '<div class="empty">Nada encontrado pra "' + esc(incQ) + '".</div>'; }
     else {
       incBox.innerHTML = incShown.map(l=>{
@@ -1948,7 +1992,7 @@ async function renderFinance(){
     else {
       const sorted = [...entries].sort((a,b)=> b.date.localeCompare(a.date));
       list.innerHTML = sorted.slice(0,30).map(e=>`
-        <div class="ledger-row"><div class="d">${e.date.split('-').reverse().join('/')}</div><div class="lbl"></div>
+        <div class="ledger-row"><div class="d">${relDate(e.date)}</div><div class="lbl"></div>
         <div class="km">${e.km? e.km+' km':''}</div><div class="val sage">${fmtMoney(Number(e.valor))}</div>
         <button class="del" data-date="${e.date}" data-valor="${e.valor}" data-km="${e.km||''}">✕</button></div>`).join('');
       list.querySelectorAll('.del').forEach(btn=>{
@@ -1968,12 +2012,12 @@ async function renderFinance(){
           || bankById(e.bank).name.toLowerCase().includes(expQ)
           || (METHODS[e.method]||'').toLowerCase().includes(expQ))
       : expLines;
-    if (expLines.length===0){ expBox.innerHTML = '<div class="empty">Nenhuma despesa cadastrada.</div>'; }
+    if (expLines.length===0){ expBox.innerHTML = emptyCta('Nenhuma despesa ainda. Registre a primeira e os gráficos ganham vida.', '+ Registrar despesa', 'btnOpenExpModal'); }
     else if (expShown.length===0){ expBox.innerHTML = '<div class="empty">Nada encontrado pra "' + esc(expQ) + '".</div>'; }
     else {
       expBox.innerHTML = expShown.map(e=>{
         const bank = bankById(e.bank);
-        const dateDisp = e.date ? e.date.split('-').reverse().join('/') : 'sem data';
+        const dateDisp = relDate(e.date);
         const recBadge = e.recorrencia==='mensal' ? '<span class="badge b-fixa">Mensal</span>' : '';
         return `<div class="expcard" data-id="${e.id}">
           ${bankAvatarHtml(e.bank)}
@@ -1989,6 +2033,10 @@ async function renderFinance(){
     }
   }
 }
+document.addEventListener('click', (e)=>{
+  const t = e.target.closest('[data-open]');
+  if (t) document.getElementById(t.dataset.open).click();
+});
 document.getElementById('expSearch').oninput = ()=> renderFinance();
 document.getElementById('incSearch').oninput = ()=> renderFinance();
 
@@ -2492,6 +2540,55 @@ document.getElementById('btnConfirmDisable2fa').onclick = async ()=>{
     refreshTotpStatus();
   } catch(e){ showSettingsMsg('Senha incorreta ou falha ao desativar.', true); }
 };
+
+document.getElementById('fabNew').onclick = ()=> document.getElementById('btnOpenExpModal').click();
+
+/* modais: Esc fecha, clique no fundo fecha, foco no primeiro campo, Enter salva */
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('mousedown', (e)=>{ if (e.target===ov) ov.classList.remove('open'); });
+  new MutationObserver(()=>{
+    if (ov.classList.contains('open')){
+      const f = ov.querySelector('input:not([type=hidden]):not([type=file]):not([type=checkbox]), select, textarea');
+      if (f) setTimeout(()=>f.focus(), 60);
+    }
+  }).observe(ov, {attributes:true, attributeFilter:['class']});
+});
+document.addEventListener('keydown', (e)=>{
+  if (e.key !== 'Escape') return;
+  const open = document.querySelector('.modal-overlay.open');
+  if (open) open.classList.remove('open');
+});
+document.querySelectorAll('.modal').forEach(m=>{
+  m.addEventListener('keydown', (e)=>{
+    if (e.key==='Enter' && e.target.tagName==='INPUT' && e.target.type!=='checkbox'){
+      const btn = m.querySelector('.btn-primary');
+      if (btn){ e.preventDefault(); btn.click(); }
+    }
+  });
+});
+
+/* revalida os dados ao voltar pro app (outro aparelho pode ter mexido) */
+let __lastReval = Date.now();
+document.addEventListener('visibilitychange', async ()=>{
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - __lastReval < 60000) return;
+  __lastReval = Date.now();
+  try{
+    const r = await fetch('api/data.php?all=1');
+    if (!r.ok) return;
+    const fresh = await r.json();
+    if (JSON.stringify(fresh) !== JSON.stringify(__cache)){
+      __cache = fresh;
+      tasks = __cache.tasks_v6 || [];
+      checklist = __cache.checklist_v6 || {};
+      applyPrefs(__cache.user_prefs || {});
+      const page = document.querySelector('.sectiontab.active')?.dataset.page;
+      if (page==='financeiro') renderFinance();
+      if (page==='agenda'){ renderAgenda(); renderHomeCharts(); }
+      renderHero();
+    }
+  }catch(e){}
+});
 
 async function init(){
   document.getElementById('ifoodDate').value = dkey(new Date());
