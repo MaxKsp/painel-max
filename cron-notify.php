@@ -81,5 +81,49 @@ foreach ($users as $user) {
     $up->execute([$user['id'], '_notified_log', json_encode($log)]);
 }
 
+/*
+ * Backup semanal por e-mail: todo domingo, cada usuário com aviso por
+ * e-mail ligado recebe o backup completo em JSON anexo. Dedupe por
+ * semana ISO gravado na chave interna _backup_log.
+ */
+$backups = 0;
+if ((int)$now->format('w') === 0) {
+    $weekKey = $now->format('o-\WW');
+    foreach ($users as $user) {
+        $stmt = $db->prepare('SELECT data_value FROM kv_store WHERE user_id = ? AND data_key = ?');
+        $stmt->execute([$user['id'], '_backup_log']);
+        $row = $stmt->fetch();
+        if ($row && json_decode($row['data_value'], true) === $weekKey) continue;
+
+        $stmt = $db->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE "\_%"');
+        $stmt->execute([$user['id']]);
+        $data = [];
+        foreach ($stmt->fetchAll() as $kv) {
+            $data[$kv['data_key']] = json_decode($kv['data_value']);
+        }
+        if (!$data) continue;
+
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $boundary = 'orby' . bin2hex(random_bytes(12));
+        $headers = "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"$boundary\"";
+        $body = "--$boundary\r\n"
+            . "Content-Type: text/plain; charset=utf-8\r\n\r\n"
+            . "Olá, {$user['username']}!\n\nSegue o backup semanal dos seus dados do Orby.\n"
+            . "Pra restaurar: Perfil -> Backup -> Restaurar backup.\n\n— Orby\r\n"
+            . "--$boundary\r\n"
+            . "Content-Type: application/json; name=\"orby-backup-{$now->format('Y-m-d')}.json\"\r\n"
+            . "Content-Disposition: attachment; filename=\"orby-backup-{$now->format('Y-m-d')}.json\"\r\n"
+            . "Content-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($json))
+            . "--$boundary--";
+        @mail($user['email'], 'Orby — backup semanal dos seus dados', $body, $headers);
+        $backups++;
+
+        $up = $db->prepare('INSERT INTO kv_store (user_id, data_key, data_value) VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE data_value = VALUES(data_value)');
+        $up->execute([$user['id'], '_backup_log', json_encode($weekKey)]);
+    }
+}
+
 header('Content-Type: text/plain');
-echo "ok - avisos enviados: $sent\n";
+echo "ok - avisos enviados: $sent - backups enviados: $backups\n";
