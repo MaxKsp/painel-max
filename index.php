@@ -329,6 +329,11 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .profilecard-title{font-size:15px;font-weight:600;margin-bottom:12px;}
   .profilecard-sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);margin-bottom:8px;}
   .profile-account{display:flex;align-items:center;gap:14px;}
+  .avatar{border:none;padding:0;cursor:pointer;overflow:hidden;position:relative;}
+  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
+  .avatar:hover::after{content:'✎';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);border-radius:50%;font-size:16px;color:#fff;}
+  .avatarlink{background:none;border:none;padding:0;margin-top:4px;color:var(--accent);font-size:12px;cursor:pointer;font-family:'Archivo',sans-serif;}
+  .avatarlink:hover{text-decoration:underline;}
   .avatar{width:48px;height:48px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;color:#fff;box-shadow:0 4px 16px var(--glow);text-transform:uppercase;}
   .profile-account .ttl{font-size:16px;font-weight:600;}
   .profile-account .sub{font-size:12.5px;color:var(--text-2);margin-top:2px;}
@@ -539,12 +544,14 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
     <div class="profilecard">
       <div class="profilecard-title">Conta</div>
       <div class="profile-account">
-        <div class="avatar" id="pfAvatar">?</div>
+        <button type="button" class="avatar" id="pfAvatar" title="Alterar foto">?</button>
         <div class="info">
           <div class="ttl" id="pfUsername">—</div>
           <div class="sub" id="pfEmail">—</div>
+          <button type="button" class="avatarlink" id="btnChangeAvatar">Alterar foto</button>
         </div>
       </div>
+      <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp" style="display:none;">
     </div>
 
     <div class="profilecard">
@@ -981,8 +988,14 @@ function renderAgenda(){
 }
 
 /* ---------- Início da Agenda: dashboard de conclusão ---------- */
-const CHART_BLUE = '#3B82F6';
-const CHART_BLUE_SOFT = 'rgba(59,130,246,0.18)';
+/* Cores dos gráficos seguem o tema escolhido no Perfil (variáveis CSS). */
+function accentHex(){ return (getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()) || '#4F8DF9'; }
+function accentRGBStr(){
+  let h = accentHex().replace('#','');
+  if (h.length===3) h = h.split('').map(c=>c+c).join('');
+  const n = parseInt(h,16);
+  return ((n>>16)&255)+','+((n>>8)&255)+','+(n&255);
+}
 let chartTaskLine=null, chartTaskCat=null;
 
 function last30Days(now){ const days=[]; for(let i=29;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); days.push(d); } return days; }
@@ -1019,7 +1032,7 @@ function renderTaskHeatmap(now){
     let textColor = '';
     if (comp!==null && comp>0){
       const t = 0.12 + 0.85*comp;
-      bg = `rgba(59,130,246,${t.toFixed(2)})`;
+      bg = `rgba(${accentRGBStr()},${t.toFixed(2)})`;
       textColor = t > 0.42 ? '#fff' : 'var(--text)';
     }
     const title = comp===null ? `${d.getDate()}/${d.getMonth()+1}: sem tarefas` : `${d.getDate()}/${d.getMonth()+1}: ${Math.round(comp*100)}% cumprido`;
@@ -1059,7 +1072,7 @@ function renderHomeCharts(){
     chartTaskLine = new Chart(document.getElementById('chartTaskLine'), {
       type:'line',
       data:{ labels: days.map(d=>pad(d.getDate())+'/'+pad(d.getMonth()+1)),
-        datasets:[{ data: comps.map(c=>c===null?null:Math.round(c*100)), borderColor: CHART_BLUE, backgroundColor: CHART_BLUE_SOFT, fill:true, tension:0.35, pointRadius:0, borderWidth:2, spanGaps:true }] },
+        datasets:[{ data: comps.map(c=>c===null?null:Math.round(c*100)), borderColor: accentHex(), backgroundColor: `rgba(${accentRGBStr()},0.18)`, fill:true, tension:0.35, pointRadius:0, borderWidth:2, spanGaps:true }] },
       options: chartBaseOptions({ scales:{ x:{ grid:{display:false}, ticks:{color:'#6A6A6E', font:{size:9}, maxTicksLimit:8} }, y:{ grid:{color:'#1E1E1E'}, ticks:{color:'#6A6A6E', font:{size:10}}, min:0, max:100 } } })
     });
   } catch(err){ console.error('chartTaskLine falhou', err); wrapLine.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
@@ -1077,7 +1090,7 @@ function renderHomeCharts(){
     });
     chartTaskCat = new Chart(document.getElementById('chartTaskCat'), {
       type:'bar',
-      data:{ labels: catKeys.map(k=>CATS[k]), datasets:[{ data: catPct, backgroundColor: CHART_BLUE, borderRadius:6, maxBarThickness:50 }] },
+      data:{ labels: catKeys.map(k=>CATS[k]), datasets:[{ data: catPct, backgroundColor: accentHex(), borderRadius:6, maxBarThickness:50 }] },
       options: chartBaseOptions({ scales:{ x:{ grid:{display:false}, ticks:{color:'#6A6A6E', font:{size:10}} }, y:{ grid:{color:'#1E1E1E'}, ticks:{color:'#6A6A6E', font:{size:10}}, min:0, max:100 } } })
     });
   } catch(err){ console.error('chartTaskCat falhou', err); wrapCat.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
@@ -1278,6 +1291,7 @@ document.querySelectorAll('.sectiontab').forEach(t=>{
     document.getElementById('page-'+t.dataset.page).classList.add('active');
     if(t.dataset.page==='financeiro') renderFinance();
     if(t.dataset.page==='perfil') renderPerfil();
+    if(t.dataset.page==='agenda') renderHomeCharts();
   };
 });
 
@@ -1555,6 +1569,21 @@ function inRange(dateStr, range){
   const d = new Date(dateStr+'T00:00:00');
   return dnum(d) >= dnum(range.start) && dnum(d) <= dnum(range.end);
 }
+/**
+ * Totais e gráficos mostram só o REALIZADO: o período selecionado é
+ * cortado em "hoje" — nada de despesa futura inflando o mês/ano.
+ */
+function clampRangeToToday(range, now){
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (dnum(range.end) <= dnum(today)) return range;
+  if (dnum(range.start) > dnum(today)) return { start: range.start, end: range.start };
+  return { start: range.start, end: today };
+}
+/** Prorata de valores mensais sem data, respeitando só o tempo já decorrido do período. */
+function prorateElapsed(monthlyValue, period, now){
+  if (period==='year') return monthlyValue * (now.getMonth() + 1);
+  return prorate(monthlyValue, period);
+}
 
 function clampDayOfMonth(year, month, day){
   const lastDay = new Date(year, month+1, 0).getDate();
@@ -1613,7 +1642,7 @@ function expenseOccurrenceEntries(expLines, range){
  * sem data (fixas mensais sem dia definido) entram prorateadas pro período,
  * do mesmo jeito que já acontece no resumo do topo.
  */
-function bucketPeriodTotals(expLines, range, period, keyFn){
+function bucketPeriodTotals(expLines, range, period, keyFn, now){
   const totals = {};
   expLines.forEach(e=>{
     const key = keyFn(e);
@@ -1621,7 +1650,7 @@ function bucketPeriodTotals(expLines, range, period, keyFn){
       const occ = expenseOccurrencesInRange(e, range).length;
       if (occ>0) totals[key] = (totals[key]||0) + occ*Number(e.value||0);
     } else {
-      totals[key] = (totals[key]||0) + prorate(Number(e.value||0), period);
+      totals[key] = (totals[key]||0) + prorateElapsed(Number(e.value||0), period, now);
     }
   });
   return totals;
@@ -1648,13 +1677,14 @@ async function renderFinance(){
 
   if (activePage === 'fpage-inicio'){
     const range = periodRange(finPeriod, now);
-    const ifoodPeriod = entries.filter(e=>inRange(e.date, range)).reduce((s,e)=>s+Number(e.valor||0),0);
-    const datedExpPeriod = expLines.filter(e=>e.date).reduce((s,e)=>s+expenseTotalInRange(e, range),0);
+    const aggRange = clampRangeToToday(range, now);
+    const ifoodPeriod = entries.filter(e=>inRange(e.date, aggRange)).reduce((s,e)=>s+Number(e.valor||0),0);
+    const datedExpPeriod = expLines.filter(e=>e.date).reduce((s,e)=>s+expenseTotalInRange(e, aggRange),0);
     const undatedExpMonthly = expLines.filter(e=>!e.date).reduce((s,e)=>s+Number(e.value||0),0);
-    const incomeFixedPeriod = incLines.filter(l=>isIncomeActive(l,now) && l.type!=='variavel').reduce((s,l)=>s+prorate(Number(l.value||0), finPeriod),0);
-    const incomeVariavelLinePeriod = incLines.filter(l=>isIncomeActive(l,now) && l.type==='variavel').reduce((s,l)=>s+prorate(Number(l.value||0), finPeriod),0);
+    const incomeFixedPeriod = incLines.filter(l=>isIncomeActive(l,now) && l.type!=='variavel').reduce((s,l)=>s+prorateElapsed(Number(l.value||0), finPeriod, now),0);
+    const incomeVariavelLinePeriod = incLines.filter(l=>isIncomeActive(l,now) && l.type==='variavel').reduce((s,l)=>s+prorateElapsed(Number(l.value||0), finPeriod, now),0);
     const entradasPeriodo = incomeFixedPeriod + incomeVariavelLinePeriod + ifoodPeriod;
-    const saidasPeriodo = datedExpPeriod + prorate(undatedExpMonthly, finPeriod);
+    const saidasPeriodo = datedExpPeriod + prorateElapsed(undatedExpMonthly, finPeriod, now);
     const saldoPeriodo = entradasPeriodo - saidasPeriodo;
 
     const saldoEl = document.getElementById('finSaldoBig');
@@ -1696,7 +1726,7 @@ async function renderFinance(){
       });
     }
 
-    renderDashCharts(entries, expLines, incLines, ifoodTotal, now, finPeriod, range);
+    renderDashCharts(entries, expLines, incLines, ifoodTotal, now, finPeriod, range, aggRange);
   }
 
   if (activePage === 'fpage-entradas'){
@@ -1764,8 +1794,8 @@ async function renderFinance(){
 }
 
 let chartLine=null, chartBank=null, chartMethod=null, chartCategoria=null;
-const CHART_PURPLE = '#7C6EF2';
-const CHART_PURPLE_SOFT = 'rgba(124,110,242,0.18)';
+function chartAccent(){ return accentHex(); }
+
 const WEEKDAY_MIN = ['D','S','T','Q','Q','S','S'];
 function chartBaseOptions(extra){
   return Object.assign({
@@ -1783,13 +1813,13 @@ function heatCellStyle(val, maxVal, extraClass, isCurrent){
   let textColor = '';
   if (val>0 && maxVal>0){
     const t = 0.12 + 0.85*(val/maxVal);
-    bg = `rgba(124,110,242,${t.toFixed(2)})`;
+    bg = `rgba(${accentRGBStr()},${t.toFixed(2)})`;
     textColor = t > 0.42 ? '#fff' : 'var(--text)';
   }
   return `class="heatcell ${extraClass||''} ${isCurrent?'today':''}" style="background:${bg};${textColor?`color:${textColor};font-weight:600;`:''}"`;
 }
 
-function renderExpenseHeatmap(expLines, now, period, range){
+function renderExpenseHeatmap(expLines, now, period, range, aggRange){
   const wrap = document.getElementById('wrapHeat');
   const titleEl = document.getElementById('heatTitle');
   const subEl = document.getElementById('heatSub');
@@ -1798,7 +1828,7 @@ function renderExpenseHeatmap(expLines, now, period, range){
     titleEl.textContent = 'Despesas por hora';
     subEl.textContent = 'Quanto mais escuro, mais foi gasto naquele horário. Hoje, ' + pad(now.getDate())+'/'+pad(now.getMonth()+1) + '.';
     const byHour = {};
-    expenseOccurrenceEntries(expLines, range).forEach(({exp})=>{
+    expenseOccurrenceEntries(expLines, aggRange).forEach(({exp})=>{
       const h = expenseHourOf(exp);
       byHour[h] = (byHour[h]||0) + Number(exp.value||0);
     });
@@ -1818,7 +1848,7 @@ function renderExpenseHeatmap(expLines, now, period, range){
     titleEl.textContent = 'Despesas por dia';
     subEl.textContent = 'Semana de ' + dkeyDisp(range.start) + ' a ' + dkeyDisp(range.end) + '.';
     const byDate = {};
-    expenseOccurrenceEntries(expLines, range).forEach(({exp, date})=>{
+    expenseOccurrenceEntries(expLines, aggRange).forEach(({exp, date})=>{
       const k = dkey(date);
       byDate[k] = (byDate[k]||0) + Number(exp.value||0);
     });
@@ -1839,7 +1869,7 @@ function renderExpenseHeatmap(expLines, now, period, range){
     titleEl.textContent = 'Despesas por mês';
     subEl.textContent = 'Quanto mais escuro, mais foi gasto naquele mês. Ano de ' + now.getFullYear() + '.';
     const byMonth = {};
-    expenseOccurrenceEntries(expLines, range).forEach(({exp, date})=>{
+    expenseOccurrenceEntries(expLines, aggRange).forEach(({exp, date})=>{
       const m = date.getMonth();
       byMonth[m] = (byMonth[m]||0) + Number(exp.value||0);
     });
@@ -1858,7 +1888,7 @@ function renderExpenseHeatmap(expLines, now, period, range){
   titleEl.textContent = 'Despesas por dia';
   subEl.textContent = 'Quanto mais escuro, mais foi gasto naquele dia. Mês atual.';
   const byDate = {};
-  expenseOccurrenceEntries(expLines, range).forEach(({exp, date})=>{
+  expenseOccurrenceEntries(expLines, aggRange).forEach(({exp, date})=>{
     const k = dkey(date);
     byDate[k] = (byDate[k]||0) + Number(exp.value||0);
   });
@@ -1880,8 +1910,8 @@ function renderExpenseHeatmap(expLines, now, period, range){
 }
 function dkeyDisp(d){ return pad(d.getDate())+'/'+pad(d.getMonth()+1); }
 
-function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, range){
-  renderExpenseHeatmap(expLines, now, period, range);
+function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, range, aggRange){
+  renderExpenseHeatmap(expLines, now, period, range, aggRange);
 
   if (typeof Chart === 'undefined'){
     ['wrapLine','wrapBank','wrapMethod','wrapCategoria'].forEach(id=>{
@@ -1895,7 +1925,7 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
   if (chartCategoria) { chartCategoria.destroy(); chartCategoria=null; }
 
   const wrapBank = document.getElementById('wrapBank');
-  const byBank = bucketPeriodTotals(expLines, range, period, e=>e.bank);
+  const byBank = bucketPeriodTotals(expLines, aggRange, period, e=>e.bank, now);
   const bankEntries = Object.entries(byBank);
   if (bankEntries.length===0){
     wrapBank.innerHTML = '<div class="dashempty">Nenhuma despesa cadastrada ainda.<br>Vá em Saídas pra registrar.</div>';
@@ -1904,14 +1934,14 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
     try {
       chartBank = new Chart(document.getElementById('chartBank'), {
         type:'bar',
-        data:{ labels: bankEntries.map(([k])=>bankById(k).name), datasets:[{ data: bankEntries.map(([,v])=>v), backgroundColor: CHART_PURPLE, borderRadius:6, maxBarThickness:60 }] },
+        data:{ labels: bankEntries.map(([k])=>bankById(k).name), datasets:[{ data: bankEntries.map(([,v])=>v), backgroundColor: accentHex(), borderRadius:6, maxBarThickness:60 }] },
         options: chartBaseOptions()
       });
     } catch(err){ console.error('chartBank falhou', err); wrapBank.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
   }
 
   const wrapMethod = document.getElementById('wrapMethod');
-  const byMethod = bucketPeriodTotals(expLines, range, period, e=>e.method);
+  const byMethod = bucketPeriodTotals(expLines, aggRange, period, e=>e.method, now);
   const methodEntries = Object.entries(byMethod);
   if (methodEntries.length===0){
     wrapMethod.innerHTML = '<div class="dashempty">Nenhuma despesa cadastrada ainda.</div>';
@@ -1920,14 +1950,14 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
     try {
       chartMethod = new Chart(document.getElementById('chartMethod'), {
         type:'bar',
-        data:{ labels: methodEntries.map(([k])=>METHODS[k]), datasets:[{ data: methodEntries.map(([,v])=>v), backgroundColor: CHART_PURPLE, borderRadius:6, maxBarThickness:60 }] },
+        data:{ labels: methodEntries.map(([k])=>METHODS[k]), datasets:[{ data: methodEntries.map(([,v])=>v), backgroundColor: accentHex(), borderRadius:6, maxBarThickness:60 }] },
         options: chartBaseOptions({ indexAxis:'y' })
       });
     } catch(err){ console.error('chartMethod falhou', err); wrapMethod.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
   }
 
   const wrapCategoria = document.getElementById('wrapCategoria');
-  const byCategoria = bucketPeriodTotals(expLines, range, period, e=>e.categoria||'outros');
+  const byCategoria = bucketPeriodTotals(expLines, aggRange, period, e=>e.categoria||'outros', now);
   const categoriaEntries = Object.entries(byCategoria).sort((a,b)=>b[1]-a[1]);
   if (categoriaEntries.length===0){
     wrapCategoria.innerHTML = '<div class="dashempty">Nenhuma despesa cadastrada ainda.</div>';
@@ -1937,7 +1967,7 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
       if (chartCategoria) chartCategoria.destroy();
       chartCategoria = new Chart(document.getElementById('chartCategoria'), {
         type:'bar',
-        data:{ labels: categoriaEntries.map(([k])=>CATEGORIA_LABEL[k]||'Outros'), datasets:[{ data: categoriaEntries.map(([,v])=>v), backgroundColor: CHART_PURPLE, borderRadius:6, maxBarThickness:60 }] },
+        data:{ labels: categoriaEntries.map(([k])=>CATEGORIA_LABEL[k]||'Outros'), datasets:[{ data: categoriaEntries.map(([,v])=>v), backgroundColor: accentHex(), borderRadius:6, maxBarThickness:60 }] },
         options: chartBaseOptions({ indexAxis:'y' })
       });
     } catch(err){ console.error('chartCategoria falhou', err); wrapCategoria.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
@@ -1966,7 +1996,7 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
       chartLine = new Chart(document.getElementById('chartLine'), {
         type:'line',
         data:{ labels,
-          datasets:[{ data: totals, borderColor: CHART_PURPLE, backgroundColor: CHART_PURPLE_SOFT, fill:true, tension:0.35, pointRadius:0, borderWidth:2 }] },
+          datasets:[{ data: totals, borderColor: accentHex(), backgroundColor: `rgba(${accentRGBStr()},0.18)`, fill:true, tension:0.35, pointRadius:0, borderWidth:2 }] },
         options: chartBaseOptions({ scales:{ x:{ grid:{display:false}, ticks:{color:'#6A6A6E', font:{size:9}, maxTicksLimit:8} }, y:{ grid:{color:'#1E1E1E'}, ticks:{color:'#6A6A6E', font:{size:10}} } } })
       });
     } catch(err){ console.error('chartLine falhou', err); wrapLine.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
@@ -2040,12 +2070,39 @@ async function renderPerfil(){
       const me = await r.json();
       document.getElementById('pfUsername').textContent = me.username;
       document.getElementById('pfEmail').textContent = me.email || 'sem e-mail cadastrado';
-      document.getElementById('pfAvatar').textContent = (me.username||'?').slice(0,1);
+      renderAvatar(me);
       document.getElementById('tglNotifEmail').checked = !!me.notify_email;
       document.getElementById('tglNotifEmail').disabled = !me.email;
     }
   }catch(e){}
 }
+
+function renderAvatar(me){
+  const el = document.getElementById('pfAvatar');
+  if (me.avatar){
+    const src = me.avatar.startsWith('http') ? me.avatar : me.avatar + '?v=' + Date.now();
+    el.innerHTML = `<img src="${esc(src)}" alt="Foto de perfil">`;
+  } else {
+    el.textContent = (me.username||'?').slice(0,1);
+  }
+}
+document.getElementById('pfAvatar').onclick = ()=> document.getElementById('avatarFile').click();
+document.getElementById('btnChangeAvatar').onclick = ()=> document.getElementById('avatarFile').click();
+document.getElementById('avatarFile').onchange = async (ev)=>{
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  if (file.size > 4*1024*1024){ showSettingsMsg('Imagem muito grande (máx 4MB).', true); return; }
+  const fd = new FormData();
+  fd.append('avatar', file);
+  try{
+    const r = await fetch('api/avatar.php', { method:'POST', headers:{'X-CSRF-Token': window.CSRF_TOKEN}, body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'upload failed');
+    renderAvatar({ avatar: j.avatar });
+    showSettingsMsg('Foto de perfil atualizada.', false);
+  } catch(e){ showSettingsMsg('Não consegui enviar a foto: ' + (e.message||''), true); }
+};
 
 document.getElementById('tglNotifBrowser').onchange = async (ev)=>{
   const tgl = ev.target;

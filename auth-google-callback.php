@@ -65,6 +65,8 @@ if (!is_array($userInfo) || empty($userInfo['sub']) || empty($userInfo['email'])
 
 $googleId = (string)$userInfo['sub'];
 $email = (string)$userInfo['email'];
+$picture = isset($userInfo['picture']) && preg_match('#^https://lh3\.googleusercontent\.com/#', (string)$userInfo['picture'])
+    ? (string)$userInfo['picture'] : null;
 
 $db = get_db();
 $stmt = $db->prepare('SELECT id, totp_enabled FROM users WHERE google_id = ?');
@@ -92,13 +94,17 @@ if (!$user) {
         $username = $baseUsername . $suffix;
     } while (true);
 
-    $stmt = $db->prepare('INSERT INTO users (username, email, google_id, email_verified_at) VALUES (?, ?, ?, NOW())');
-    $stmt->execute([$username, $email, $googleId]);
+    $stmt = $db->prepare('INSERT INTO users (username, email, google_id, email_verified_at, avatar) VALUES (?, ?, ?, NOW(), ?)');
+    $stmt->execute([$username, $email, $googleId, $picture]);
     $userId = (int)$db->lastInsertId();
     $totpEnabled = false;
 } else {
     $userId = (int)$user['id'];
     $totpEnabled = (int)$user['totp_enabled'] === 1;
+    // preenche a foto do Google se o usuário ainda não tem nenhuma
+    if ($picture) {
+        $db->prepare('UPDATE users SET avatar = ? WHERE id = ? AND avatar IS NULL')->execute([$picture, $userId]);
+    }
 }
 
 if ($totpEnabled) {

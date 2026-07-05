@@ -28,3 +28,4 @@ jobs:
             **/README.md
             **/ROADMAP.md
             **/config.example.php
+            uploads/**
