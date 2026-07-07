@@ -438,7 +438,37 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .goalrow.over .nums{color:var(--brick);font-weight:600;}
   .goalinput-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
   .goalinput-row label{font-size:13px;color:var(--text);margin:0;text-transform:none;font-family:'Archivo',sans-serif;letter-spacing:0;}
-  .goalinput-row input{width:130px;text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .goalinput-row input[type=number]{width:110px;text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .goalinput-row .goal-newname{flex:1;min-width:0;font-size:13px;}
+  .goalinput-row .goal-newlimit{width:90px;text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .cat-custom{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);background:var(--accent-soft);padding:1px 6px;border-radius:99px;font-family:'IBM Plex Mono',monospace;}
+  .goal-del{background:none;border:none;color:var(--text-3);font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0;}
+  .goal-del:hover{color:var(--brick);}
+
+  /* treinos */
+  .ex-row{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;}
+  .ex-row.done{border-color:var(--sage);}
+  .ex-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-strong);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:transparent;transition:all .15s;background:none;}
+  .ex-row.done .ex-check{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .ex-row .ex-info{flex:1;min-width:0;}
+  .ex-row .ex-name{font-size:13.5px;font-weight:500;}
+  .ex-row.done .ex-name{text-decoration:line-through;opacity:.6;}
+  .ex-row .ex-meta{font-size:11px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .ex-load{width:74px;flex-shrink:0;text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .ex-last{font-size:10px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;white-space:nowrap;flex-shrink:0;}
+  /* linhas de exercício no modal (nome, séries, reps) */
+  .exedit-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+  .exedit-row .exe-name{flex:1;min-width:0;font-size:13px;}
+  .exedit-row .exe-num{width:56px;text-align:center;font-family:'IBM Plex Mono',monospace;}
+  .exedit-row .exe-x{color:var(--text-3);font-size:12px;}
+  .wocard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s,border-color .15s,transform .12s;}
+  .wocard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-1px);}
+  .wocard .wo-icon{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;}
+  .wocard .wo-icon svg{width:20px;height:20px;}
+  .wocard .info{flex:1;min-width:0;}
+  .wocard .ttl{font-size:14px;font-weight:600;}
+  .wocard .sub{font-size:11.5px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .wo-done-badge{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--sage);background:rgba(79,176,122,.14);padding:2px 8px;border-radius:99px;font-family:'IBM Plex Mono',monospace;}
 
   /* perfil */
   .profilecard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow-card);}
@@ -497,8 +527,8 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="sectiontab" data-page="financeiro" title="Financeiro">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.2 1.1-2 2.5-2s2.5.9 2.5 2c0 2.5-5 1.7-5 4.2 0 1.1 1.1 2 2.5 2s2.5-.8 2.5-2"/></svg>
       </div>
-      <div class="sectiontab" data-page="diagnostico" title="Diagnóstico">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
+      <div class="sectiontab" data-page="treinos" title="Treinos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11M4 8v8M8 4v16M16 4v16M20 8v8M2 12h2M20 12h2"/></svg>
       </div>
       <div class="sectiontab" data-page="perfil" title="Perfil" id="tabPerfil">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
@@ -660,11 +690,31 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
     </div>
   </div>
 
-  <div class="page" id="page-diagnostico">
-    <h2>Diagnóstico</h2>
-    <p class="footnote" style="margin-bottom:14px;">Analisa os últimos 14 dias de agenda cumprida e caixa, e aponta onde ajustar. Na versão final roda pelo Gemini, no servidor.</p>
-    <button class="action" id="btnAnalyze">Rodar diagnóstico</button>
-    <div id="insightsResult" style="margin-top:16px;white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text-2);"></div>
+  <div class="page" id="page-treinos">
+    <div class="instrument" id="workoutHero">
+      <div class="instrument-head"><span class="eyebrow">Treino de hoje</span></div>
+      <div class="instrument-body">
+        <div class="field" style="margin-bottom:0;">
+          <label>Qual treino você vai fazer hoje?</label>
+          <select id="todayWorkout"><option value="">— escolher treino —</option></select>
+        </div>
+        <div id="todayExercises" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <div class="finrow3" id="workoutStatRow"></div>
+
+    <div class="dashgrid" style="margin-top:18px;">
+      <div class="dashcard">
+        <div class="dashcard-title">Dias treinados</div>
+        <div class="dashcard-sub">Cada dia com treino concluído fica marcado. Mês atual.</div>
+        <div id="wrapWorkoutHeat"></div>
+      </div>
+    </div>
+
+    <div class="fpage-head"><h2 style="margin:26px 0 0;">Meus treinos</h2><button class="addbtn-sm" id="btnNewWorkout">+</button></div>
+    <div class="dashcard-sub" style="margin:2px 0 10px;">Modelos de treino com seus exercícios. Toque pra editar.</div>
+    <div id="workoutList"></div>
   </div>
 
   <div class="page" id="page-perfil">
@@ -901,11 +951,29 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
 <div class="modal-overlay" id="goalsModalOverlay">
   <div class="modal">
     <h3>Metas de gasto por categoria</h3>
-    <p style="font-size:12.5px;color:var(--text-2);margin:0 0 14px;">Deixe em branco as categorias sem meta. O limite vale pro mês.</p>
+    <p style="font-size:12.5px;color:var(--text-2);margin:0 0 14px;">Defina um limite mensal por categoria. Deixe em branco as que não quer acompanhar. Crie categorias próprias com o botão abaixo — elas também aparecem no cadastro de despesa.</p>
     <div id="goalsInputs"></div>
+    <button class="btn-ghost" id="goalsAddCat" style="width:100%;margin-top:4px;">+ Adicionar categoria personalizada</button>
     <div class="modal-actions">
       <button class="btn-ghost" id="goalsCancel">Cancelar</button>
       <button class="btn-primary" id="goalsSave">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="workoutModalOverlay">
+  <div class="modal">
+    <h3 id="workoutModalTitle">Novo treino</h3>
+    <div class="field"><label>Nome do treino</label><input type="text" id="woName" placeholder="Ex: Peito e Tríceps"></div>
+    <div class="field">
+      <label>Exercícios</label>
+      <div id="woExercises"></div>
+      <button type="button" class="btn-ghost" id="woAddEx" style="width:100%;margin-top:2px;">+ Adicionar exercício</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="woDelete" style="display:none;margin-right:auto;color:var(--brick);border-color:var(--brick);">Excluir</button>
+      <button class="btn-ghost" id="woCancel">Cancelar</button>
+      <button class="btn-primary" id="woSave">Salvar</button>
     </div>
   </div>
 </div>
@@ -1449,8 +1517,242 @@ document.querySelectorAll('.sectiontab').forEach(t=>{
     if(t.dataset.page==='financeiro') renderFinance();
     if(t.dataset.page==='perfil') renderPerfil();
     if(t.dataset.page==='agenda') renderHomeCharts();
+    if(t.dataset.page==='treinos') renderTreinos();
   };
 });
+
+/* ============ Treinos ============ */
+async function getWorkouts(){ return await storeGet('workouts', []); }
+async function getWorkoutLog(){ return await storeGet('workout_log', {}); }
+function exMeta(ex){ return (ex.sets||'?') + ' × ' + (ex.reps||'?'); }
+
+/** peso mais recente registrado pra um exercício antes de hoje (progressão) */
+function lastLoad(log, exId, beforeKey){
+  const keys = Object.keys(log).filter(k=>k < beforeKey).sort().reverse();
+  for (const k of keys){
+    const l = log[k];
+    if (l && l.loads && l.loads[exId] != null && l.loads[exId] !== '') return l.loads[exId];
+  }
+  return null;
+}
+function isTrainedDay(log, k){ const l = log[k]; return !!(l && l.done && l.done.length>0); }
+function renderWorkoutStats(log, nWorkouts, now){
+  const monthTrained = Object.keys(log).filter(k=>k.startsWith(monthKey(now)) && isTrainedDay(log,k)).length;
+  document.getElementById('workoutStatRow').innerHTML = `
+    <div class="fc"><div class="v">${workoutStreak(log, now)}</div><div class="l">Dias seguidos</div></div>
+    <div class="fc"><div class="v">${monthTrained}</div><div class="l">Treinos no mês</div></div>
+    <div class="fc"><div class="v">${nWorkouts}</div><div class="l">Treinos cadastrados</div></div>`;
+}
+function workoutStreak(log, now){
+  let streak = 0; let d = new Date(now);
+  // se hoje ainda não treinou, começa a contar de ontem
+  if (!isTrainedDay(log, dkey(d))) d = addDays(d, -1);
+  let guard = 0;
+  while (isTrainedDay(log, dkey(d)) && guard < 3660){ streak++; d = addDays(d, -1); guard++; }
+  return streak;
+}
+
+async function renderTreinos(){
+  const workouts = await getWorkouts();
+  const log = await getWorkoutLog();
+  const now = new Date();
+  const todayKey = dkey(now);
+
+  // ---- treino de hoje ----
+  const sel = document.getElementById('todayWorkout');
+  const todayEntry = log[todayKey] || null;
+  const selectedId = (todayEntry && todayEntry.workoutId) || '';
+  sel.innerHTML = '<option value="">— escolher treino —</option>' +
+    workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  sel.value = selectedId;
+  if (sel.__syncPick) sel.__syncPick();
+  renderTodayExercises(workouts, log, now);
+
+  // ---- stats ----
+  renderWorkoutStats(log, workouts.length, now);
+
+  // ---- heatmap ----
+  renderWorkoutHeatmap(log, now);
+
+  // ---- lista de treinos ----
+  const box = document.getElementById('workoutList');
+  if (workouts.length===0){
+    box.innerHTML = emptyCta('Monte seu primeiro treino com os exercícios que você faz.', '+ Criar treino', 'btnNewWorkout');
+  } else {
+    box.innerHTML = workouts.map(w=>{
+      const doneToday = todayEntry && todayEntry.workoutId===w.id && todayEntry.done && todayEntry.done.length>0;
+      return `<div class="wocard" data-id="${w.id}">
+        <div class="wo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11M4 8v8M8 4v16M16 4v16M20 8v8"/></svg></div>
+        <div class="info"><div class="ttl">${esc(w.name)}</div><div class="sub">${(w.exercises||[]).length} exercício${(w.exercises||[]).length===1?'':'s'}</div></div>
+        ${doneToday?'<span class="wo-done-badge">feito hoje</span>':''}
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.wocard').forEach(card=>{
+      card.onclick = ()=>{ const w = workouts.find(x=>x.id===card.dataset.id); if (w) openWorkoutEdit(w); };
+    });
+  }
+}
+
+async function renderTodayExercises(workouts, log, now){
+  const wrap = document.getElementById('todayExercises');
+  const todayKey = dkey(now);
+  const sel = document.getElementById('todayWorkout');
+  const wId = sel.value;
+  if (!wId){ wrap.innerHTML = '<div style="font-size:12.5px;color:var(--text-3);">Escolha um treino acima pra marcar os exercícios do dia.</div>'; return; }
+  const workout = workouts.find(w=>w.id===wId);
+  if (!workout || !(workout.exercises||[]).length){ wrap.innerHTML = '<div style="font-size:12.5px;color:var(--text-3);">Esse treino ainda não tem exercícios. Edite ele em "Meus treinos".</div>'; return; }
+  const entry = log[todayKey] && log[todayKey].workoutId===wId ? log[todayKey] : { workoutId:wId, done:[], loads:{} };
+  wrap.innerHTML = workout.exercises.map(ex=>{
+    const done = entry.done.includes(ex.id);
+    const load = entry.loads[ex.id] ?? '';
+    const prev = lastLoad(log, ex.id, todayKey);
+    return `<div class="ex-row ${done?'done':''}" data-ex="${ex.id}">
+      <button class="ex-check" data-check="${ex.id}">✓</button>
+      <div class="ex-info"><div class="ex-name">${esc(ex.name)}</div><div class="ex-meta">${exMeta(ex)}</div></div>
+      ${prev!=null?`<span class="ex-last">últ: ${esc(String(prev))}kg</span>`:''}
+      <input type="number" class="ex-load" data-load="${ex.id}" placeholder="kg" value="${load}" step="0.5" min="0">
+    </div>`;
+  }).join('');
+
+  async function persist(){
+    const l = await getWorkoutLog();
+    if (entry.done.length===0 && Object.keys(entry.loads).length===0) delete l[todayKey];
+    else l[todayKey] = entry;
+    await storeSet('workout_log', l);
+  }
+  wrap.querySelectorAll('[data-check]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.check;
+      const i = entry.done.indexOf(id);
+      if (i>=0) entry.done.splice(i,1); else entry.done.push(id);
+      btn.closest('.ex-row').classList.toggle('done', entry.done.includes(id));
+      await persist();
+      // atualiza stats/heatmap sem redesenhar a lista (não perde foco)
+      const l = await getWorkoutLog();
+      renderWorkoutStats(l, (await getWorkouts()).length, now);
+      renderWorkoutHeatmap(l, now);
+    };
+  });
+  wrap.querySelectorAll('[data-load]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const id = inp.dataset.load;
+      if (inp.value==='') delete entry.loads[id]; else entry.loads[id] = Number(inp.value);
+      await persist();
+    };
+  });
+}
+document.getElementById('todayWorkout').addEventListener('change', async ()=>{
+  const workouts = await getWorkouts();
+  const log = await getWorkoutLog();
+  const now = new Date();
+  renderTodayExercises(workouts, log, now);
+  renderWorkoutStats(log, workouts.length, now);
+  renderWorkoutHeatmap(log, now);
+});
+
+function renderWorkoutHeatmap(log, now){
+  const wrap = document.getElementById('wrapWorkoutHeat');
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  const gridStart = new Date(first); gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+  let html = '<div class="heatgrid">' + WEEKDAY_MIN.map(d=>`<div class="heat-head">${d}</div>`).join('');
+  for (let i=0;i<42;i++){
+    const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+    const inMonth = d.getMonth()===now.getMonth();
+    if (!inMonth && i>=35) continue;
+    const k = dkey(d);
+    const trained = dnum(d) <= dnum(now) && isTrainedDay(log, k);
+    const isToday = k===dkey(now);
+    let bg = 'var(--surface-2)', textColor='';
+    if (trained){ bg = `rgba(${accentRGBStr()},0.85)`; textColor = '#fff'; }
+    html += `<div class="heatcell ${inMonth?'':'outmonth'} ${isToday?'today':''}" style="background:${bg};${textColor?`color:${textColor};font-weight:600;`:''}" title="${d.getDate()}/${d.getMonth()+1}: ${trained?'treinou':'—'}">${d.getDate()}</div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+/* ---- modal criar/editar treino ---- */
+let editingWorkoutId = null;
+function exEditRow(ex){
+  ex = ex || { name:'', sets:'', reps:'' };
+  return `<div class="exedit-row">
+    <input type="text" class="exe-name" placeholder="Exercício" value="${esc(ex.name||'')}">
+    <input type="number" class="exe-num exe-sets" placeholder="séries" value="${ex.sets||''}" min="0">
+    <span class="exe-x">×</span>
+    <input type="number" class="exe-num exe-reps" placeholder="reps" value="${ex.reps||''}" min="0">
+    <button type="button" class="goal-del exe-del" title="Remover">✕</button>
+  </div>`;
+}
+document.getElementById('btnNewWorkout').onclick = ()=>{
+  editingWorkoutId = null;
+  document.getElementById('workoutModalTitle').textContent = 'Novo treino';
+  document.getElementById('woName').value = '';
+  document.getElementById('woExercises').innerHTML = exEditRow() + exEditRow() + exEditRow();
+  document.getElementById('woDelete').style.display = 'none';
+  document.getElementById('workoutModalOverlay').classList.add('open');
+};
+function openWorkoutEdit(w){
+  editingWorkoutId = w.id;
+  document.getElementById('workoutModalTitle').textContent = 'Editar treino';
+  document.getElementById('woName').value = w.name;
+  document.getElementById('woExercises').innerHTML = (w.exercises||[]).map(exEditRow).join('') || exEditRow();
+  document.getElementById('woDelete').style.display = '';
+  document.getElementById('workoutModalOverlay').classList.add('open');
+}
+document.getElementById('woAddEx').onclick = ()=>{
+  document.getElementById('woExercises').insertAdjacentHTML('beforeend', exEditRow());
+  const rows = document.querySelectorAll('#woExercises .exe-name');
+  rows[rows.length-1]?.focus();
+};
+document.getElementById('woExercises').addEventListener('click', (e)=>{
+  if (e.target.closest('.exe-del')) e.target.closest('.exedit-row').remove();
+});
+document.getElementById('woCancel').onclick = ()=> document.getElementById('workoutModalOverlay').classList.remove('open');
+document.getElementById('woSave').onclick = async ()=>{
+  const name = document.getElementById('woName').value.trim();
+  if (!name){ toast('Dê um nome pro treino', {error:true}); return; }
+  const exercises = [];
+  document.querySelectorAll('#woExercises .exedit-row').forEach(row=>{
+    const exName = row.querySelector('.exe-name').value.trim();
+    if (!exName) return;
+    exercises.push({
+      id: genId(),
+      name: exName,
+      sets: Number(row.querySelector('.exe-sets').value)||'',
+      reps: Number(row.querySelector('.exe-reps').value)||'',
+    });
+  });
+  let workouts = await getWorkouts();
+  if (editingWorkoutId){
+    const w = workouts.find(x=>x.id===editingWorkoutId);
+    if (w){
+      // preserva ids de exercícios que continuaram (por nome) pra não perder histórico de carga
+      const byName = {}; (w.exercises||[]).forEach(e=>{ byName[e.name.toLowerCase()] = e.id; });
+      exercises.forEach(e=>{ const old = byName[e.name.toLowerCase()]; if (old) e.id = old; });
+      w.name = name; w.exercises = exercises;
+    }
+  } else {
+    workouts.push({ id: genId(), name, exercises, createdAt: Date.now() });
+  }
+  await storeSet('workouts', workouts);
+  document.getElementById('workoutModalOverlay').classList.remove('open');
+  renderTreinos();
+  toast(editingWorkoutId ? 'Treino atualizado' : 'Treino criado');
+};
+document.getElementById('woDelete').onclick = async ()=>{
+  if (!editingWorkoutId) return;
+  let workouts = await getWorkouts();
+  const removed = workouts.find(w=>w.id===editingWorkoutId);
+  workouts = workouts.filter(w=>w.id!==editingWorkoutId);
+  await storeSet('workouts', workouts);
+  document.getElementById('workoutModalOverlay').classList.remove('open');
+  renderTreinos();
+  toast('Treino excluído', { undo: async ()=>{
+    const cur = await getWorkouts();
+    cur.push(removed);
+    await storeSet('workouts', cur);
+    renderTreinos();
+  }});
+};
 
 async function getExpenseLines(){
   return await storeGet('expense_lines_v4', []);
@@ -1573,7 +1875,7 @@ document.getElementById('btnOpenExpModal').onclick = async ()=>{
   document.getElementById('emDate').value = dkey(new Date());
   document.getElementById('emTime').value = pad(new Date().getHours())+':'+pad(new Date().getMinutes());
   document.getElementById('emRecorrente').checked = false;
-  document.getElementById('emCategoria').value = 'outros';
+  fillCategorySelect(document.getElementById('emCategoria'), 'outros');
   document.getElementById('emMethod').value = 'pix';
   renderMethodPicker('emMethodPicker', 'emMethod', 'pix');
   document.getElementById('emBank').value = 'outro';
@@ -1655,7 +1957,7 @@ function openExpenseEdit(line){
   document.getElementById('emDate').value = line.date || '';
   document.getElementById('emTime').value = expenseTimeOf(line);
   document.getElementById('emRecorrente').checked = line.recorrencia === 'mensal';
-  document.getElementById('emCategoria').value = line.categoria || 'outros';
+  fillCategorySelect(document.getElementById('emCategoria'), line.categoria || 'outros');
   document.getElementById('emMethod').value = line.method;
   renderMethodPicker('emMethodPicker', 'emMethod', line.method);
   document.getElementById('emBank').value = line.bank;
@@ -1887,6 +2189,22 @@ function bucketPeriodTotals(expLines, range, period, keyFn, now){
 
 const CATEGORIA_LABEL = { moradia:'Moradia', transporte:'Transporte', alimentacao:'Alimentação', lazer:'Lazer', saude:'Saúde', educacao:'Educação', assinaturas:'Assinaturas', financiamento:'Financiamento', outros:'Outros' };
 
+/* categorias = presets fixos + as que o usuário cria (kv custom_categories) */
+let __customCats = [];
+function catSlug(name){ return (name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40) || ('cat'+Date.now()); }
+function allCategories(){
+  const out = {...CATEGORIA_LABEL};
+  __customCats.forEach(c=>{ if (c && c.key) out[c.key] = c.label; });
+  return out;
+}
+function catLabel(key){ return allCategories()[key] || key || 'Outros'; }
+async function loadCustomCats(){ __customCats = await storeGet('custom_categories', []); }
+function fillCategorySelect(sel, selected){
+  const cats = allCategories();
+  sel.innerHTML = Object.entries(cats).map(([k,label])=>`<option value="${k}">${esc(label)}</option>`).join('');
+  sel.value = (selected && cats[selected]) ? selected : 'outros';
+}
+
 /* ---- Metas de gasto por categoria ---- */
 async function renderGoals(expLines, now){
   const box = document.getElementById('goalsList');
@@ -1904,25 +2222,74 @@ async function renderGoals(expLines, now){
     const pct = Math.min(100, Math.round(spent/goal*100));
     const cls = spent>goal ? 'over' : (spent>=goal*0.8 ? 'warn' : '');
     return `<div class="goalrow ${cls}">
-      <div class="toprow"><div class="cat">${CATEGORIA_LABEL[k]||k}</div><div class="nums">${fmtMoney(spent)} / ${fmtMoney(goal)}${spent>goal?' · estourou':''}</div></div>
+      <div class="toprow"><div class="cat">${catLabel(k)}</div><div class="nums">${fmtMoney(spent)} / ${fmtMoney(goal)}${spent>goal?' · estourou':''}</div></div>
       <div class="goalbar"><div style="width:${pct}%"></div></div>
     </div>`;
   }).join('');
 }
+function goalRowFixed(k, label, isCustom, val){
+  return `<div class="goalinput-row" data-key="${k}">
+    <label>${esc(label)}${isCustom?' <span class="cat-custom">personalizada</span>':''}</label>
+    <span style="display:flex;align-items:center;gap:6px;">
+      <input type="number" step="0.01" min="0" data-goal="${k}" placeholder="sem meta" value="${val||''}">
+      ${isCustom?`<button type="button" class="goal-del" title="Remover categoria" data-delcat="${k}">✕</button>`:''}
+    </span>
+  </div>`;
+}
+function goalRowNew(){
+  return `<div class="goalinput-row goal-new">
+    <input type="text" class="goal-newname" placeholder="Nome da categoria" maxlength="30">
+    <span style="display:flex;align-items:center;gap:6px;">
+      <input type="number" step="0.01" min="0" class="goal-newlimit" placeholder="limite">
+      <button type="button" class="goal-del" title="Remover" data-delnew="1">✕</button>
+    </span>
+  </div>`;
+}
 document.getElementById('btnEditGoals').onclick = async ()=>{
   const goals = await storeGet('budget_goals', {});
-  document.getElementById('goalsInputs').innerHTML = Object.entries(CATEGORIA_LABEL).map(([k,label])=>
-    `<div class="goalinput-row"><label>${label}</label><input type="number" step="0.01" min="0" data-goal="${k}" placeholder="sem meta" value="${goals[k]||''}"></div>`
+  const customKeys = new Set(__customCats.map(c=>c.key));
+  const box = document.getElementById('goalsInputs');
+  box.innerHTML = Object.entries(allCategories()).map(([k,label])=>
+    goalRowFixed(k, label, customKeys.has(k), goals[k])
   ).join('');
   document.getElementById('goalsModalOverlay').classList.add('open');
 };
+document.getElementById('goalsAddCat').onclick = ()=>{
+  document.getElementById('goalsInputs').insertAdjacentHTML('beforeend', goalRowNew());
+  const rows = document.querySelectorAll('#goalsInputs .goal-new .goal-newname');
+  rows[rows.length-1]?.focus();
+};
+document.getElementById('goalsInputs').addEventListener('click', (e)=>{
+  const b = e.target.closest('[data-delcat],[data-delnew]');
+  if (b) b.closest('.goalinput-row').remove();
+});
 document.getElementById('goalsCancel').onclick = ()=> document.getElementById('goalsModalOverlay').classList.remove('open');
 document.getElementById('goalsSave').onclick = async ()=>{
   const goals = {};
+  const presetKeys = new Set(Object.keys(CATEGORIA_LABEL));
+  const custom = [];
+  // categorias existentes (preset + custom que sobreviveram)
   document.querySelectorAll('#goalsInputs input[data-goal]').forEach(inp=>{
+    const k = inp.dataset.goal;
+    if (!presetKeys.has(k)){
+      const c = __customCats.find(x=>x.key===k);
+      if (c) custom.push(c);
+    }
     const v = Number(inp.value);
-    if (v>0) goals[inp.dataset.goal] = v;
+    if (v>0) goals[k] = v;
   });
+  // categorias personalizadas novas
+  document.querySelectorAll('#goalsInputs .goal-new').forEach(row=>{
+    const name = row.querySelector('.goal-newname').value.trim();
+    if (!name) return;
+    let key = catSlug(name);
+    while (presetKeys.has(key) || custom.some(c=>c.key===key)) key += '_';
+    custom.push({ key, label: name });
+    const v = Number(row.querySelector('.goal-newlimit').value);
+    if (v>0) goals[key] = v;
+  });
+  __customCats = custom;
+  await storeSet('custom_categories', custom);
   await storeSet('budget_goals', goals);
   document.getElementById('goalsModalOverlay').classList.remove('open');
   renderFinance();
@@ -2055,7 +2422,7 @@ async function renderFinance(){
     const expQ = (document.getElementById('expSearch').value||'').toLowerCase().trim();
     const expShown = expQ
       ? expLines.filter(e=> (e.label||'').toLowerCase().includes(expQ)
-          || (CATEGORIA_LABEL[e.categoria]||'').toLowerCase().includes(expQ)
+          || catLabel(e.categoria).toLowerCase().includes(expQ)
           || bankById(e.bank).name.toLowerCase().includes(expQ)
           || (METHODS[e.method]||'').toLowerCase().includes(expQ))
       : expLines;
@@ -2069,7 +2436,7 @@ async function renderFinance(){
         return `<div class="expcard" data-id="${e.id}">
           ${bankAvatarHtml(e.bank)}
           <div class="info"><div class="ttl">${esc(e.label)}</div>
-            <div class="metarow"><span class="badge">${dateDisp}</span>${recBadge}<span class="badge">${CATEGORIA_LABEL[e.categoria]||'Outros'}</span><span class="badge">${METHODS[e.method]}</span><span class="badge">${bank.name}</span></div>
+            <div class="metarow"><span class="badge">${dateDisp}</span>${recBadge}<span class="badge">${catLabel(e.categoria)}</span><span class="badge">${METHODS[e.method]}</span><span class="badge">${bank.name}</span></div>
           </div>
           <div class="val">${fmtMoney(e.value)}</div>
         </div>`;
@@ -2262,7 +2629,7 @@ function renderDashCharts(entries, expLines, incLines, ifoodTotal, now, period, 
       if (chartCategoria) chartCategoria.destroy();
       chartCategoria = new Chart(document.getElementById('chartCategoria'), {
         type:'bar',
-        data:{ labels: categoriaEntries.map(([k])=>CATEGORIA_LABEL[k]||'Outros'), datasets:[{ data: categoriaEntries.map(([,v])=>v), backgroundColor: accentHex(), borderRadius:6, maxBarThickness:60 }] },
+        data:{ labels: categoriaEntries.map(([k])=>catLabel(k)), datasets:[{ data: categoriaEntries.map(([,v])=>v), backgroundColor: accentHex(), borderRadius:6, maxBarThickness:60 }] },
         options: chartBaseOptions({ indexAxis:'y' })
       });
     } catch(err){ console.error('chartCategoria falhou', err); wrapCategoria.innerHTML = '<div class="dashempty">Não consegui desenhar este gráfico agora.</div>'; }
@@ -2343,13 +2710,6 @@ document.getElementById('btnAddIfood').onclick = async ()=>{
   renderFinance();
 };
 
-document.getElementById('btnAnalyze').onclick = async ()=>{
-  const btn = document.getElementById('btnAnalyze'); const out = document.getElementById('insightsResult');
-  btn.disabled = true; btn.textContent = 'Rodando...'; out.textContent = '';
-  await new Promise(r=>setTimeout(r,600));
-  out.textContent = 'Prévia: na versão final, o diagnóstico roda pelo Gemini no servidor, olhando sua taxa de agenda cumprida e seu caixa dos últimos 14 dias.';
-  btn.disabled = false; btn.textContent = 'Rodar diagnóstico';
-};
 
 /* ---- Perfil: mensagens, temas e notificações ---- */
 const settingsMsg = document.getElementById('settingsMsg');
@@ -2483,7 +2843,7 @@ document.getElementById('btnExportCsv').onclick = async ()=>{
   const csvCell = v => '"' + String(v??'').replace(/"/g,'""') + '"';
   const num = v => String(Number(v||0)).replace('.', ',');
   const rows = [['tipo','descricao','valor','data','hora','categoria','forma_pagamento','banco','recorrencia']];
-  expLines.forEach(e=> rows.push(['despesa', e.label, num(e.value), e.date||'', expenseTimeOf(e), CATEGORIA_LABEL[e.categoria]||'Outros', METHODS[e.method]||'', bankById(e.bank).name, e.recorrencia==='mensal'?'mensal':'']));
+  expLines.forEach(e=> rows.push(['despesa', e.label, num(e.value), e.date||'', expenseTimeOf(e), catLabel(e.categoria), METHODS[e.method]||'', bankById(e.bank).name, e.recorrencia==='mensal'?'mensal':'']));
   incLines.forEach(l=> rows.push(['renda', l.label, num(l.value), l.endDate||'', '', TYPE_LABEL[l.type]||'', '', '', l.type==='temporaria'?'':'mensal']));
   entries.forEach(e=> rows.push(['renda variavel', e.km?('iFood '+e.km+' km'):'lançamento', num(e.valor), e.date||'', '', '', '', '', '']));
   const csv = '﻿' + rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
@@ -2801,6 +3161,7 @@ document.addEventListener('visibilitychange', async ()=>{
       tasks = __cache.tasks_v6 || [];
       checklist = __cache.checklist_v6 || {};
       applyPrefs(__cache.user_prefs || {});
+      __customCats = __cache.custom_categories || [];
       const page = document.querySelector('.sectiontab.active')?.dataset.page;
       if (page==='financeiro') renderFinance();
       if (page==='agenda'){ renderAgenda(); renderHomeCharts(); }
@@ -2812,6 +3173,7 @@ document.addEventListener('visibilitychange', async ()=>{
 async function init(){
   document.getElementById('ifoodDate').value = dkey(new Date());
   applyPrefs(await storeGet('user_prefs', {}));
+  await loadCustomCats();
   await ensureSeeded();
   renderHomeCharts();
   renderAgenda();
