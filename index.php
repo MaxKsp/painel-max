@@ -719,7 +719,12 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="finhead"><div class="big" id="finSaldoBig">R$ 0,00</div><div class="lbl" id="finSaldoLbl">Saldo do mês</div></div>
       <div class="finrow3" id="finRow3"></div>
 
-      <div class="fpage-head"><h2 style="margin:26px 0 0;">Contas</h2><button class="addbtn-sm" id="btnOpenAccModal">+</button></div>
+      <div class="fpage-head"><h2 style="margin:26px 0 0;">Contas</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-ghost" id="btnTransfer" style="padding:5px 12px;font-size:12px;">⇄ Transferir</button>
+          <button class="addbtn-sm" id="btnOpenAccModal">+</button>
+        </div>
+      </div>
       <div class="dashcard-sub" style="margin:2px 0 10px;">Sem Open Finance ainda — você registra o saldo manualmente. Visão geral das suas contas e cartões.</div>
       <div id="accSummary" class="acc-summary"></div>
       <div id="accOverdraftAlert"></div>
@@ -1049,6 +1054,24 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
     <div class="modal-actions">
       <button class="btn-ghost" id="adClose">Fechar</button>
       <button class="btn-primary" id="adEdit">Editar conta</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="transferModalOverlay">
+  <div class="modal">
+    <h3>Transferência</h3>
+    <p style="font-size:12.5px;color:var(--text-2);margin:0 0 12px;">Move saldo entre contas, ou paga a fatura de um cartão com uma conta. Ajusta os saldos e aparece nos dois extratos.</p>
+    <div class="field"><label>De (conta)</label><select id="trFrom"></select></div>
+    <div class="field"><label>Para (conta ou cartão)</label><select id="trTo"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Valor (R$)</label><input type="number" id="trValue" step="0.01"></div>
+      <div class="field"><label>Data</label><input type="date" id="trDate"></div>
+    </div>
+    <div id="trHint" style="font-size:11.5px;color:var(--text-3);margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="trCancel">Cancelar</button>
+      <button class="btn-primary" id="trSave">Transferir</button>
     </div>
   </div>
 </div>
@@ -2678,6 +2701,8 @@ async function openAccountDetail(acc){
   __detailAccId = acc.id;
   const expLines = await getExpenseLines();
   const incLines = await getIncomeLines();
+  const allAccounts = await getAccounts();
+  const transfers = await getTransfers();
   const isCartao = acc.tipo==='cartao';
   const saldoNeg = !isCartao && Number(acc.saldo||0)<0;
   const tiedExp = expLines.filter(e=>e.accountId===acc.id);
@@ -2717,7 +2742,19 @@ async function openAccountDetail(acc){
     ${expSorted.map(e=>`<div class="ad-row"><div class="adi"><div class="adl">${esc(e.label)}</div>
       <div class="adm">${relDate(e.date)} · ${esc(catLabel(e.categoria))}${e.recorrencia==='mensal'?' · mensal':''}</div></div>
       <div class="adv brick">-${fmtMoney(e.value).replace('R$ ','')}</div></div>`).join('')}` : '';
-  const body = incHtml + expHtml;
+  const tiedTr = transfers.filter(t=>t.fromId===acc.id || t.toId===acc.id)
+    .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const trHtml = tiedTr.length ? `
+    <div class="ad-sec">Transferências</div>
+    ${tiedTr.map(t=>{
+      const out = t.fromId===acc.id;
+      const other = out ? accLabelById(allAccounts, t.toId) : accLabelById(allAccounts, t.fromId);
+      const lbl = out ? (t.kind==='payment'?'Pagamento de fatura para '+other:'Transferência para '+other) : 'Transferência de '+other;
+      return `<div class="ad-row"><div class="adi"><div class="adl">${esc(lbl)}</div>
+        <div class="adm">${relDate(t.date)}</div></div>
+        <div class="adv ${out?'brick':'sage'}">${out?'-':'+'}${fmtMoney(t.value).replace('R$ ','')}</div></div>`;
+    }).join('')}` : '';
+  const body = incHtml + trHtml + expHtml;
   document.getElementById('adBody').innerHTML = body || '<div class="empty">Nenhuma movimentação vinculada a esta conta ainda.</div>';
   document.getElementById('accountDetailOverlay').classList.add('open');
 }
@@ -2725,6 +2762,70 @@ document.getElementById('adClose').onclick = ()=> document.getElementById('accou
 document.getElementById('adEdit').onclick = async ()=>{
   document.getElementById('accountDetailOverlay').classList.remove('open');
   const accs = await getAccounts(); const a = accs.find(x=>x.id===__detailAccId); if (a) openAccountEdit(a);
+};
+
+/* ---- Transferência entre contas ---- */
+async function getTransfers(){ return await storeGet('transfers', []); }
+function accLabelById(accounts, id){ const a = accounts.find(x=>x.id===id); return a ? a.label : '—'; }
+async function updateTransferHint(){
+  const accounts = await getAccounts();
+  const to = accounts.find(a=>a.id===document.getElementById('trTo').value);
+  document.getElementById('trHint').textContent = (to && to.tipo==='cartao')
+    ? 'Destino é cartão: o valor abate a fatura (pagamento).'
+    : 'Move o saldo de uma conta pra outra.';
+}
+document.getElementById('btnTransfer').onclick = async ()=>{
+  const accounts = await getAccounts();
+  const contas = accounts.filter(a=>(a.tipo||'conta')==='conta');
+  if (contas.length===0){ toast('Cadastre uma conta primeiro.', {error:true}); return; }
+  document.getElementById('trFrom').innerHTML = contas.map(a=>`<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  document.getElementById('trTo').innerHTML = accounts.filter(a=>a.id!==contas[0].id)
+    .map(a=>`<option value="${a.id}">${esc(a.label)}${a.tipo==='cartao'?' (cartão)':''}</option>`).join('');
+  document.getElementById('trValue').value = '';
+  document.getElementById('trDate').value = dkey(new Date());
+  await updateTransferHint();
+  document.getElementById('transferModalOverlay').classList.add('open');
+};
+document.getElementById('trFrom').onchange = async ()=>{
+  const accounts = await getAccounts();
+  const fromId = document.getElementById('trFrom').value;
+  const cur = document.getElementById('trTo').value;
+  document.getElementById('trTo').innerHTML = accounts.filter(a=>a.id!==fromId)
+    .map(a=>`<option value="${a.id}">${esc(a.label)}${a.tipo==='cartao'?' (cartão)':''}</option>`).join('');
+  if ([...document.getElementById('trTo').options].some(o=>o.value===cur)) document.getElementById('trTo').value = cur;
+  await updateTransferHint();
+};
+document.getElementById('trTo').onchange = updateTransferHint;
+document.getElementById('trCancel').onclick = ()=> document.getElementById('transferModalOverlay').classList.remove('open');
+document.getElementById('trSave').onclick = async ()=>{
+  const fromId = document.getElementById('trFrom').value;
+  const toId = document.getElementById('trTo').value;
+  const value = Number(document.getElementById('trValue').value||0);
+  const date = document.getElementById('trDate').value || dkey(new Date());
+  if (!fromId || !toId || fromId===toId){ toast('Escolha contas diferentes.', {error:true}); return; }
+  if (value<=0){ toast('Valor inválido.', {error:true}); return; }
+  const accounts = await getAccounts();
+  const from = accounts.find(a=>a.id===fromId), to = accounts.find(a=>a.id===toId);
+  if (!from || !to) return;
+  const toCard = to.tipo==='cartao';
+  from.saldo = Number(from.saldo||0) - value;
+  if (toCard) to.fatura = Math.max(0, Number(to.fatura||0) - value);
+  else to.saldo = Number(to.saldo||0) + value;
+  const tr = { id: genId(), fromId, toId, value, date, kind: toCard?'payment':'transfer', createdAt: Date.now() };
+  const transfers = await getTransfers(); transfers.push(tr);
+  await storeSet('accounts_v2', accounts);
+  await storeSet('transfers', transfers);
+  document.getElementById('transferModalOverlay').classList.remove('open');
+  renderFinance();
+  toast(toCard?'Fatura paga por transferência':'Transferência feita', { undo: async ()=>{
+    const accs = await getAccounts();
+    const f = accs.find(a=>a.id===fromId), t = accs.find(a=>a.id===toId);
+    if (f) f.saldo = Number(f.saldo||0) + value;
+    if (t){ if (toCard) t.fatura = Number(t.fatura||0) + value; else t.saldo = Number(t.saldo||0) - value; }
+    let trs = await getTransfers(); trs = trs.filter(x=>x.id!==tr.id);
+    await storeSet('accounts_v2', accs); await storeSet('transfers', trs);
+    renderFinance();
+  }});
 };
 async function accountAction(act, id){
   let accounts = await getAccounts();

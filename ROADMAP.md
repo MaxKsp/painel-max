@@ -71,6 +71,13 @@ própria e um PR separado.
         recebimento" (reusa `transactions.account_id`, sem migração).
       - [x] P3: alternar visão "Por conta" (lista) × "Por banco" (agrupa por
         banco com subtotal de saldo/fatura). Escolha persiste em kv `acc_view`.
+- [ ] **Mais features de banco** (incremental):
+      - [x] Seletor: "Outro" sai do grid, vai pra dentro de "Mais bancos".
+      - [x] Transferência entre contas (e pagar fatura de cartão com conta):
+        ajusta saldos/fatura e aparece nos dois extratos. kv `transfers`.
+      - [ ] Cofrinhos / metas de guardar dentro da conta.
+      - [ ] Projeção de saldo do mês (rendas + despesas recorrentes).
+      - [ ] Lembrete de vencimento de fatura.
 - [x] **Front do financeiro (pacote)** — catálogo de ~87 bancos com busca e
       até 11 favoritos editáveis (estilo app de banco); dia de pagamento na
       renda; no cartão, dia de fechamento e vencimento da fatura; card de
