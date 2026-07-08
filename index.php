@@ -177,10 +177,11 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .cat-ifood .dot{background:var(--sage);} .cat-descanso .dot{background:var(--text-3);} .cat-deslocamento .dot{background:var(--tan);}
 
 
-  .agenda-subnav{display:flex;gap:0;border:1px solid var(--line);border-radius:999px;width:fit-content;margin-bottom:20px;overflow:hidden;}
-  .apill, .tsub{padding:7px 16px;font-size:12px;color:var(--text-2);cursor:pointer;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.04em;transition:color .15s,background .15s;}
-  .apill:hover, .tsub:hover{color:var(--text);}
-  .apill.active, .tsub.active{background:var(--grad);color:#fff;box-shadow:0 2px 10px var(--glow);}
+  .agenda-subnav{display:inline-flex;gap:2px;background:var(--surface-2);border-radius:10px;padding:3px;width:fit-content;max-width:100%;margin-bottom:20px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;}
+  .agenda-subnav::-webkit-scrollbar{display:none;}
+  .apill, .tsub{padding:6px 15px;font-size:12.5px;font-weight:500;color:var(--text-3);cursor:pointer;border-radius:7px;white-space:nowrap;flex-shrink:0;transition:background .14s,color .14s;}
+  .apill:hover, .tsub:hover{color:var(--text-2);}
+  .apill.active, .tsub.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.25);}
   /* Financeiro: navegação estilo fintech (abas sublinhadas + segmented) */
   .fin-subnav{display:flex;gap:26px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;}
   .fin-subnav::-webkit-scrollbar{display:none;}
