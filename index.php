@@ -629,6 +629,13 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   /* perfil */
   .profilecard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow-card);}
   .profilecard-title{font-size:15px;font-weight:600;margin-bottom:12px;}
+  .secorder-row{display:flex;align-items:center;gap:11px;padding:10px 2px;border-bottom:1px solid var(--line);}
+  .secorder-row.muted{opacity:.55;}
+  .secorder-ic{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+  .secorder-name{flex:1;font-size:13.5px;font-weight:500;}
+  .secord-btn{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;width:28px;height:28px;border-radius:7px;transition:background .12s,color .12s;}
+  .secord-btn:hover:not(:disabled){background:var(--surface-3);color:var(--text);}
+  .secord-btn:disabled{opacity:.3;cursor:default;}
   .profilecard-sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);margin-bottom:8px;}
   .profile-account{display:flex;align-items:center;gap:14px;}
   .avatar{border:none;padding:0;cursor:pointer;overflow:hidden;position:relative;}
@@ -927,6 +934,12 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
         </div>
       </div>
       <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp" style="display:none;">
+    </div>
+
+    <div class="profilecard">
+      <div class="profilecard-title">Ordem das seções</div>
+      <div class="profilecard-sub" style="margin-bottom:10px;">Defina a ordem do menu principal. O Perfil fica sempre por último.</div>
+      <div id="sectionOrderList"></div>
     </div>
 
     <div class="profilecard">
@@ -4590,6 +4603,7 @@ document.addEventListener('visibilitychange', async ()=>{
       __customCats = __cache.custom_categories || [];
       if (Array.isArray(__cache.bank_favorites) && __cache.bank_favorites.length) __bankFavorites = __cache.bank_favorites;
       if (__cache.acc_view==='conta'||__cache.acc_view==='banco') __accView = __cache.acc_view;
+      if (Array.isArray(__cache.section_order)){ __sectionOrder = __cache.section_order.filter(p=>SECTION_DEF.includes(p)); SECTION_DEF.forEach(p=>{ if(!__sectionOrder.includes(p)) __sectionOrder.push(p); }); applySectionOrder(); renderSectionOrderList(); }
       const page = document.querySelector('.sectiontab.active')?.dataset.page;
       if (page==='financeiro') renderFinance();
       if (page==='agenda'){ renderAgenda(); renderHomeCharts(); }
@@ -4598,12 +4612,55 @@ document.addEventListener('visibilitychange', async ()=>{
   }catch(e){}
 });
 
+/* ---- Ordem das seções (menu principal) ---- */
+const SECTION_DEF = ['agenda','financeiro','treinos'];
+const SECTION_LABEL = { agenda:'Rotina', financeiro:'Finanças', treinos:'Treino' };
+const SECTION_ICON = { agenda:'📅', financeiro:'💰', treinos:'🏋️' };
+let __sectionOrder = SECTION_DEF.slice();
+async function loadSectionOrder(){
+  const o = await storeGet('section_order', null);
+  if (Array.isArray(o)){
+    const valid = o.filter(p=>SECTION_DEF.includes(p));
+    SECTION_DEF.forEach(p=>{ if(!valid.includes(p)) valid.push(p); });
+    __sectionOrder = valid;
+  }
+}
+function applySectionOrder(){
+  const nav = document.getElementById('sectiontabs'); if (!nav) return;
+  const byPage = {};
+  [...nav.children].forEach(c=>{ if(c.dataset.page) byPage[c.dataset.page]=c; });
+  __sectionOrder.forEach(p=>{ if(byPage[p]) nav.appendChild(byPage[p]); });
+  if (byPage['perfil']) nav.appendChild(byPage['perfil']);
+}
+function renderSectionOrderList(){
+  const box = document.getElementById('sectionOrderList'); if (!box) return;
+  box.innerHTML = __sectionOrder.map((p,i)=>`
+    <div class="secorder-row">
+      <span class="secorder-ic">${SECTION_ICON[p]}</span>
+      <div class="secorder-name">${SECTION_LABEL[p]}</div>
+      <button class="secord-btn" data-dir="up" data-p="${p}" title="Subir" ${i===0?'disabled':''}>↑</button>
+      <button class="secord-btn" data-dir="down" data-p="${p}" title="Descer" ${i===__sectionOrder.length-1?'disabled':''}>↓</button>
+    </div>`).join('') +
+    `<div class="secorder-row muted"><span class="secorder-ic">👤</span><div class="secorder-name">Perfil</div><span style="font-size:10.5px;color:var(--text-3);">sempre por último</span></div>`;
+  box.querySelectorAll('.secord-btn').forEach(b=> b.onclick = async ()=>{
+    const p = b.dataset.p, i = __sectionOrder.indexOf(p);
+    if (b.dataset.dir==='up' && i>0) [__sectionOrder[i-1],__sectionOrder[i]] = [__sectionOrder[i],__sectionOrder[i-1]];
+    if (b.dataset.dir==='down' && i<__sectionOrder.length-1) [__sectionOrder[i+1],__sectionOrder[i]] = [__sectionOrder[i],__sectionOrder[i+1]];
+    await storeSet('section_order', __sectionOrder);
+    applySectionOrder(); renderSectionOrderList();
+    toast('Ordem das seções atualizada');
+  });
+}
+
 async function init(){
   document.getElementById('ifoodDate').value = dkey(new Date());
   applyPrefs(await storeGet('user_prefs', {}));
   await loadCustomCats();
   await loadBankFavorites();
   await loadAccView();
+  await loadSectionOrder();
+  applySectionOrder();
+  renderSectionOrderList();
   await ensureSeeded();
   renderHomeCharts();
   renderAgenda();
