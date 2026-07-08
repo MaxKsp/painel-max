@@ -262,6 +262,24 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .ad-row .adm{font-size:10.5px;color:var(--text-3);margin-top:1px;}
   .ad-row .adv{font-family:'IBM Plex Mono',monospace;font-size:13px;flex-shrink:0;}
   .ad-row .adv.sage{color:var(--sage);} .ad-row .adv.brick{color:var(--brick);}
+  .det-top{display:flex;align-items:center;gap:12px;}
+  .det-top .acc-logo{width:42px;height:42px;border-radius:10px;}
+  .fat-status{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding:3px 8px;border-radius:99px;flex-shrink:0;}
+  .fat-status.closed{background:rgba(225,92,86,.14);color:var(--brick);}
+  .fat-status.open{background:rgba(79,176,122,.14);color:var(--sage);}
+  .det-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+  .det-stats .ds-l{font-size:10.5px;color:var(--text-3);margin-bottom:3px;}
+  .det-stats .ds-v{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;}
+  .det-stats .ds-v.sage{color:var(--sage);} .det-stats .ds-v.brick{color:var(--brick);}
+  .det-subline{font-size:11.5px;color:var(--text-3);margin-top:8px;}
+  .det-actions{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+  .det-act{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 6px;font-size:11px;font-weight:500;color:var(--text-2);cursor:pointer;transition:background .12s,color .12s;}
+  .det-act:hover:not(:disabled){background:var(--surface-3);color:var(--text);}
+  .det-act:disabled{opacity:.4;cursor:default;}
+  .det-act .da-ic{font-size:17px;line-height:1;}
+  .acccard .fatbadge{font-size:8.5px;text-transform:uppercase;letter-spacing:.03em;font-weight:600;padding:2px 6px;border-radius:99px;margin-left:6px;}
+  .acccard .fatbadge.closed{background:rgba(225,92,86,.14);color:var(--brick);}
+  .acccard .fatbadge.open{background:rgba(79,176,122,.14);color:var(--sage);}
   .vaultcard{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:8px;}
   .vaulttop{display:flex;align-items:center;gap:8px;}
   .vaulttop .vaultname{font-size:13px;font-weight:500;cursor:pointer;}
@@ -2712,6 +2730,11 @@ function accountCardHtml(a, reorder, idx, total){
   const valHtml = isCartao
     ? `<div class="val" style="color:var(--brick)">${fmtMoney(a.fatura)}</div>`
     : `<div class="val"${saldoNeg?' style="color:var(--brick)"':''}>${fmtMoney(a.saldo)}</div>`;
+  let fatBadge = '';
+  if (isCartao && a.fechamento){
+    const closed = new Date().getDate() >= a.fechamento;
+    fatBadge = `<span class="fatbadge ${closed?'closed':'open'}">${closed?'fechada':'aberta'}</span>`;
+  }
   let subHtml;
   if (isCartao){
     const dias = [a.fechamento?('fecha dia '+a.fechamento):'', a.vencimento?('vence dia '+a.vencimento):''].filter(Boolean).join(' · ');
@@ -2733,7 +2756,7 @@ function accountCardHtml(a, reorder, idx, total){
       <img src="assets/bancos/${bankById(a.bank).id}.svg" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
       <div class="fallback-initials" style="display:none;background:${bankColor(bankById(a.bank))}">${bankInitials(bankById(a.bank))}</div>
     </div>
-    <div class="info"><div class="ttl">${esc(a.label)} ${a.principal?'<span class="badge b-principal">Principal</span>':''}</div>
+    <div class="info"><div class="ttl">${esc(a.label)} ${a.principal?'<span class="badge b-principal">Principal</span>':''}${fatBadge}</div>
       <div class="sub">${subHtml}</div>
     </div>
     <div class="accright">
@@ -2767,21 +2790,39 @@ async function openAccountDetail(acc){
   const saldoNeg = !isCartao && Number(acc.saldo||0)<0;
   const tiedExp = expLines.filter(e=>e.accountId===acc.id);
   const tiedInc = incLines.filter(l=>l.accountId===acc.id);
-  let headMeta;
+  const now = new Date();
+  let statsHtml, subLine, statusBadge = '', actionsHtml;
   if (isCartao){
     const disp = Math.max(0, Number(acc.limite||0)-Number(acc.fatura||0));
-    const dias = [acc.fechamento?('fecha dia '+acc.fechamento):'', acc.vencimento?('vence dia '+acc.vencimento):''].filter(Boolean).join(' · ');
-    headMeta = `Fatura <b style="color:var(--brick)">${fmtMoney(acc.fatura)}</b> · limite ${fmtMoney(acc.limite)} · disponível ${fmtMoney(disp)}${dias?'<br>'+dias:''}`;
+    const closed = acc.fechamento ? now.getDate() >= acc.fechamento : false;
+    if (acc.fechamento) statusBadge = `<span class="fat-status ${closed?'closed':'open'}">${closed?'Fatura fechada':'Fatura aberta'}</span>`;
+    const melhor = acc.fechamento ? (acc.fechamento>=31 ? 1 : acc.fechamento+1) : null;
+    subLine = [acc.vencimento?('Vence dia '+acc.vencimento):'', melhor?('melhor dia de compra: '+melhor):''].filter(Boolean).join(' · ');
+    statsHtml = `
+      <div><div class="ds-l">Valor da fatura</div><div class="ds-v brick">${fmtMoney(acc.fatura)}</div></div>
+      <div><div class="ds-l">Disponível</div><div class="ds-v sage">${fmtMoney(disp)}</div></div>`;
+    actionsHtml = `
+      <button class="det-act" data-detact="payfatura" ${Number(acc.fatura)<=0?'disabled':''}><span class="da-ic">💳</span>Pagar fatura</button>
+      <button class="det-act" data-detact="transfer"><span class="da-ic">⇄</span>Transferir</button>
+      <button class="det-act" data-detact="edit"><span class="da-ic">✎</span>Editar</button>`;
   } else {
     const ce = Number(acc.chequeEspecial||0);
-    let ceTxt = '';
-    if (saldoNeg){ const used=-Number(acc.saldo); ceTxt = ` · cheque especial ${fmtMoney(used)} usado${ce>0?' de '+fmtMoney(ce):''}`; }
-    else if (ce>0){ ceTxt = ` · cheque especial ${fmtMoney(ce)} disponível`; }
-    const livreTxt = reserved>0 ? ` · livre ${fmtMoney(Number(acc.saldo||0)-reserved)}` : '';
-    headMeta = `Saldo <b style="color:${saldoNeg?'var(--brick)':'var(--sage)'}">${fmtMoney(acc.saldo)}</b>${livreTxt}${ceTxt}`;
+    const used = saldoNeg ? -Number(acc.saldo) : 0;
+    let col2Lbl, col2Val, col2Cls;
+    if (ce>0){ col2Lbl='Cheque especial'; col2Val=fmtMoney(Math.max(0,ce-used))+' livre'; col2Cls=''; }
+    else if (reserved>0){ col2Lbl='Guardado em cofrinhos'; col2Val=fmtMoney(reserved); col2Cls=''; }
+    else { col2Lbl='Disponível'; col2Val=fmtMoney(Number(acc.saldo||0)); col2Cls='sage'; }
+    subLine = reserved>0 ? ('Livre pra usar: '+fmtMoney(Number(acc.saldo||0)-reserved)) : '';
+    statsHtml = `
+      <div><div class="ds-l">Saldo${saldoNeg?' (negativo)':''}</div><div class="ds-v ${saldoNeg?'brick':'sage'}">${fmtMoney(acc.saldo)}</div></div>
+      <div><div class="ds-l">${col2Lbl}</div><div class="ds-v ${col2Cls}">${col2Val}</div></div>`;
+    actionsHtml = `
+      <button class="det-act" data-detact="transfer"><span class="da-ic">⇄</span>Transferir</button>
+      <button class="det-act" data-detact="cofrinho"><span class="da-ic">🐷</span>Cofrinho</button>
+      <button class="det-act" data-detact="edit"><span class="da-ic">✎</span>Editar</button>`;
   }
   document.getElementById('adHeader').innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;">
+    <div class="det-top">
       <div class="bankavatar acc-logo">
         <img src="assets/bancos/${bankById(acc.bank).id}.svg" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
         <div class="fallback-initials" style="display:none;background:${bankColor(bankById(acc.bank))}">${bankInitials(bankById(acc.bank))}</div>
@@ -2790,8 +2831,12 @@ async function openAccountDetail(acc){
         <h3 style="margin:0;">${esc(acc.label)} ${acc.principal?'<span class="badge b-principal">Principal</span>':''}</h3>
         <div style="font-size:11.5px;color:var(--text-3);margin-top:3px;">${bankById(acc.bank).name} · ${isCartao?'Cartão de crédito':'Conta'}</div>
       </div>
+      ${statusBadge}
     </div>
-    <div style="font-size:12.5px;color:var(--text-2);margin-top:10px;">${headMeta}</div>`;
+    <div class="det-stats">${statsHtml}</div>
+    ${subLine?`<div class="det-subline">${subLine}</div>`:''}
+    <div class="det-actions">${actionsHtml}</div>`;
+  document.querySelectorAll('#adHeader .det-act').forEach(b=> b.onclick = ()=> detailAction(b.dataset.detact, acc.id));
   const incHtml = tiedInc.length ? `
     <div class="ad-sec">Rendas que caem aqui</div>
     ${tiedInc.map(l=>`<div class="ad-row"><div class="adi"><div class="adl">${esc(l.label)}</div>
@@ -2851,6 +2896,37 @@ async function refreshDetail(){
   if (!__detailAccId) return;
   const accs = await getAccounts(); const a = accs.find(x=>x.id===__detailAccId);
   if (a) await openAccountDetail(a);
+}
+async function payFaturaAccount(acc){
+  if (acc.tipo!=='cartao' || Number(acc.fatura)<=0) return;
+  const valor = Number(acc.fatura);
+  if (!confirm(`Pagar a fatura de ${fmtMoney(valor)} do cartão "${acc.label}"?\n\nZera a fatura e registra a saída de hoje nas despesas.`)) return;
+  const accounts = await getAccounts();
+  const a = accounts.find(x=>x.id===acc.id); if (!a) return;
+  a.fatura = 0;
+  const lines = await getExpenseLines();
+  lines.push({ id: genId(), label: 'Pagamento fatura — ' + a.label, value: valor,
+    date: dkey(new Date()), time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()),
+    recorrencia: 'none', categoria: 'outros', method: 'pix', bank: a.bank, createdAt: Date.now() });
+  await storeSet('accounts_v2', accounts);
+  await storeSet('expense_lines_v4', lines);
+  await refreshDetail(); renderFinance();
+  toast('Fatura paga');
+}
+async function detailAction(act, accId){
+  const accounts = await getAccounts();
+  const acc = accounts.find(a=>a.id===accId); if (!acc) return;
+  if (act==='edit'){ document.getElementById('accountDetailOverlay').classList.remove('open'); openAccountEdit(acc); return; }
+  if (act==='cofrinho'){ openVaultModal(acc.id, null); return; }
+  if (act==='payfatura'){ await payFaturaAccount(acc); return; }
+  if (act==='transfer'){
+    document.getElementById('accountDetailOverlay').classList.remove('open');
+    document.getElementById('btnTransfer').click();
+    await new Promise(r=>setTimeout(r,60));
+    if (acc.tipo==='cartao'){ const to=document.getElementById('trTo'); if ([...to.options].some(o=>o.value===accId)){ to.value=accId; if(to.onchange) to.onchange(); } }
+    else { const from=document.getElementById('trFrom'); if ([...from.options].some(o=>o.value===accId)){ from.value=accId; if(from.onchange) from.onchange(); } }
+    return;
+  }
 }
 
 /* ---- Cofrinhos ---- */
