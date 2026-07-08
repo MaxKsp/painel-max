@@ -29,12 +29,26 @@ Construído de propósito para rodar em **hospedagem compartilhada comum** (PHP 
 - Mapa de calor de conclusão e gráficos dos últimos 30 dias
 - Alarme de tarefa com notificação do navegador
 
-**💰 Financeiro**
-- Contas e cartões com saldo e fatura
-- Despesas avulsas e recorrentes mensais, com data e horário
-- Rendas fixas, temporárias e variáveis (com lançamento diário)
-- Gráficos por banco, categoria e forma de pagamento, filtrados por dia / semana / mês / ano
-- Mapa de calor de gastos que muda de granularidade com o período (hora → dia → mês)
+**💰 Financeiro — experiência de app de banco**
+- Visão consolidada: patrimônio líquido, saldo total, fatura dos cartões e crédito disponível
+- Detalhe de conta/cartão estilo extrato: duas colunas (saldo/cheque especial · fatura/disponível), status da fatura (aberta/fechada), vencimento e melhor dia de compra, e ações rápidas
+- Catálogo de ~87 bancos com logo, busca e até 11 favoritos editáveis
+- Cheque especial por conta (limite, saldo negativo e alerta de uso)
+- Cofrinhos / metas de guardar dinheiro dentro da conta (estilo Caixinhas)
+- Transferência entre contas e pagamento de fatura de cartão com uma conta
+- Projeção de saldo do fim do mês e lembrete de vencimento de fatura
+- Conciliação por extrato bancário (OFX) com marcação de duplicados
+- Despesas avulsas e recorrentes movimentando conta/cartão, com estorno
+- Rendas fixas, temporárias e variáveis, com dia de pagamento e conta de recebimento
+- Metas por categoria, alerta de gasto fora do padrão e relatório anual (IR) em PDF
+- Gráficos por banco, categoria e forma de pagamento (dia / semana / mês / ano) e mapa de calor de gastos
+- Contas vistas por conta ou agrupadas por banco
+
+**🏋️ Treinos**
+- Treinos-modelo com exercícios (séries × reps) e assistente que gera a divisão pelo objetivo
+- Treino do dia com checklist, carga por exercício e histórico de progressão
+- Sequência de dias treinados e mapa de calor do mês
+- Medidas corporais, peso, IMC com classificação e gráfico de evolução
 
 **🔐 Plataforma**
 - Multiusuário: cadastro com e-mail, dados totalmente isolados por conta
