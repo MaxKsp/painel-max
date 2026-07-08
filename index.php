@@ -227,6 +227,15 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   .acccard .ttl{font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px;}
   .acccard .sub{font-size:10.5px;color:var(--text-3);margin-top:3px;font-family:'IBM Plex Mono',monospace;}
   .acccard .val{font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--sage);}
+  .acccard .acc-logo{width:44px;height:44px;border-radius:10px;}
+  .acccard .acc-logo img{padding:5px;border-radius:10px;}
+  .acccard .accright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+  .acccard .accacts{display:flex;gap:2px;}
+  .accact{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:13px;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0;transition:background .12s,color .12s;}
+  .accact:hover:not(:disabled){background:var(--surface-3);color:var(--text);}
+  .accact:disabled{opacity:.3;cursor:default;}
+  .accact.on{color:#F5B301;}
+  .accact.danger:hover{color:var(--brick);}
   .badge.b-principal{background:#12233F;color:#7BA6F5;}
 
   .barlist-row{margin-bottom:12px;}
@@ -415,6 +424,13 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   #fabNew{position:fixed;right:22px;bottom:22px;z-index:45;width:54px;height:54px;border-radius:50%;border:none;background:var(--grad);color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 22px var(--glow);transition:transform .12s,filter .15s;}
   #fabNew:hover{filter:brightness(1.1);}
   #fabNew:active{transform:scale(.92);}
+  #fabNew.open{transform:rotate(45deg);}
+  #fabMenu{position:fixed;right:22px;bottom:86px;z-index:46;display:none;flex-direction:column;gap:8px;align-items:flex-end;}
+  #fabMenu.open{display:flex;animation:fabIn .16s ease;}
+  @keyframes fabIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .fab-item{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line-strong);color:var(--text);border-radius:99px;padding:9px 15px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:var(--shadow-pop);white-space:nowrap;transition:background .12s;}
+  .fab-item:hover{background:var(--surface-2);}
+  .fab-item .fab-ic{font-size:15px;line-height:1;}
 
   /* navegacao no polegar em telas pequenas */
   @media (max-width:640px){
@@ -933,7 +949,10 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
         </select>
       </div>
     </div>
-    <div class="field" id="imEndField" style="display:none;"><label>Válida até</label><input type="date" id="imEnd"></div>
+    <div class="field-row">
+      <div class="field" id="imPaydayField"><label>Dia do pagamento</label><input type="number" id="imPayday" min="1" max="31" placeholder="Ex: 5"></div>
+      <div class="field" id="imEndField" style="display:none;"><label>Válida até</label><input type="date" id="imEnd"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="imDelete" style="display:none;margin-right:auto;color:var(--brick);border-color:var(--brick);">Excluir</button>
       <button class="btn-ghost" id="imCancel">Cancelar</button>
@@ -1006,6 +1025,10 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
       <div class="field"><label>Limite total (R$)</label><input type="number" id="acLimite" step="0.01"></div>
       <div class="field"><label>Fatura atual (R$)</label><input type="number" id="acFatura" step="0.01"></div>
     </div>
+    <div class="field-row" id="acFaturaDias" style="display:none;">
+      <div class="field"><label>Dia de fechamento</label><input type="number" id="acFechamento" min="1" max="31" placeholder="Ex: 28"></div>
+      <div class="field"><label>Dia de vencimento</label><input type="number" id="acVencimento" min="1" max="31" placeholder="Ex: 8"></div>
+    </div>
     <button class="btn-ghost" id="acPayFatura" style="display:none;width:100%;margin-bottom:14px;">Pagar fatura (zera e registra a saída)</button>
     <div class="field">
       <label>Banco</label>
@@ -1024,7 +1047,13 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
   </div>
 </div>
 
-<button id="fabNew" title="Nova despesa">+</button>
+<div id="fabMenu">
+  <button class="fab-item" data-fab="expense"><span class="fab-ic">💸</span>Nova despesa</button>
+  <button class="fab-item" data-fab="income"><span class="fab-ic">💰</span>Nova renda</button>
+  <button class="fab-item" data-fab="account"><span class="fab-ic">🏦</span>Nova conta</button>
+  <button class="fab-item" data-fab="task"><span class="fab-ic">✓</span>Nova tarefa</button>
+</div>
+<button id="fabNew" title="Criar">+</button>
 
 <div class="modal-overlay" id="goalsModalOverlay">
   <div class="modal">
@@ -2351,6 +2380,7 @@ document.getElementById('btnOpenIncModal').onclick = ()=>{
   document.getElementById('imValue').value = '';
   document.getElementById('imType').value = 'fixa';
   document.getElementById('imEnd').value = '';
+  document.getElementById('imPayday').value = '';
   document.getElementById('imEndField').style.display = 'none';
   document.getElementById('imDelete').style.display = 'none';
   document.getElementById('incomeModalOverlay').classList.add('open');
@@ -2362,12 +2392,14 @@ document.getElementById('imSave').onclick = async ()=>{
   const value = Number(document.getElementById('imValue').value||0);
   const type = document.getElementById('imType').value;
   const endDate = document.getElementById('imEnd').value || null;
+  const pdRaw = parseInt(document.getElementById('imPayday').value, 10);
+  const payday = (pdRaw>=1 && pdRaw<=31) ? pdRaw : null;
   let lines = await getIncomeLines();
   if (editingIncomeId){
     const l = lines.find(x=>x.id===editingIncomeId);
-    if (l){ l.label=label; l.value=value; l.type=type; l.endDate = type==='temporaria'?endDate:null; }
+    if (l){ l.label=label; l.value=value; l.type=type; l.endDate = type==='temporaria'?endDate:null; l.payday=payday; }
   } else {
-    lines.push({ id: genId(), label, value, type, endDate: type==='temporaria'?endDate:null, createdAt: Date.now() });
+    lines.push({ id: genId(), label, value, type, endDate: type==='temporaria'?endDate:null, payday, createdAt: Date.now() });
   }
   await storeSet('income_lines', lines);
   document.getElementById('incomeModalOverlay').classList.remove('open');
@@ -2396,6 +2428,7 @@ function openIncomeEdit(line){
   document.getElementById('imValue').value = line.value;
   document.getElementById('imType').value = line.type;
   document.getElementById('imEnd').value = line.endDate || '';
+  document.getElementById('imPayday').value = line.payday || '';
   document.getElementById('imEndField').style.display = line.type==='temporaria' ? '' : 'none';
   document.getElementById('imDelete').style.display = '';
   document.getElementById('incomeModalOverlay').classList.add('open');
@@ -2533,10 +2566,37 @@ function openExpenseEdit(line){
 async function getAccounts(){
   return await storeGet('accounts_v2', []);
 }
+async function accountAction(act, id){
+  let accounts = await getAccounts();
+  const idx = accounts.findIndex(a=>a.id===id);
+  if (idx<0) return;
+  if (act==='edit'){ openAccountEdit(accounts[idx]); return; }
+  if (act==='star'){
+    const willBe = !accounts[idx].principal;
+    accounts.forEach(a=>a.principal=false);
+    accounts[idx].principal = willBe;
+    await storeSet('accounts_v2', accounts); renderFinance();
+    toast(willBe ? 'Conta principal definida' : 'Conta principal removida'); return;
+  }
+  if (act==='up' && idx>0){ [accounts[idx-1],accounts[idx]]=[accounts[idx],accounts[idx-1]]; await storeSet('accounts_v2', accounts); renderFinance(); return; }
+  if (act==='down' && idx<accounts.length-1){ [accounts[idx+1],accounts[idx]]=[accounts[idx],accounts[idx+1]]; await storeSet('accounts_v2', accounts); renderFinance(); return; }
+  if (act==='del'){
+    const removed = accounts[idx];
+    accounts = accounts.filter(a=>a.id!==id);
+    await storeSet('accounts_v2', accounts); renderFinance();
+    toast('Conta excluída', { undo: async ()=>{
+      const cur = await getAccounts();
+      cur.splice(Math.min(idx, cur.length), 0, removed);
+      await storeSet('accounts_v2', cur); renderFinance();
+    }});
+  }
+}
 function toggleAccountFields(tipo){
   document.getElementById('acSaldoField').style.display = tipo==='cartao' ? 'none' : '';
   document.getElementById('acCartaoFields').style.display = tipo==='cartao' ? 'flex' : 'none';
+  document.getElementById('acFaturaDias').style.display = tipo==='cartao' ? 'flex' : 'none';
 }
+function dayOrNull(id){ const v = parseInt(document.getElementById(id).value,10); return (v>=1 && v<=31) ? v : null; }
 document.getElementById('acTipo').onchange = (e)=> toggleAccountFields(e.target.value);
 
 let editingAccountId = null;
@@ -2548,6 +2608,8 @@ document.getElementById('btnOpenAccModal').onclick = ()=>{
   document.getElementById('acSaldo').value = '';
   document.getElementById('acLimite').value = '';
   document.getElementById('acFatura').value = '';
+  document.getElementById('acFechamento').value = '';
+  document.getElementById('acVencimento').value = '';
   document.getElementById('acBank').value = 'outro';
   document.getElementById('acPrincipal').checked = false;
   toggleAccountFields('conta');
@@ -2564,15 +2626,17 @@ document.getElementById('acSave').onclick = async ()=>{
   const saldo = Number(document.getElementById('acSaldo').value||0);
   const limite = Number(document.getElementById('acLimite').value||0);
   const fatura = Number(document.getElementById('acFatura').value||0);
+  const fechamento = tipo==='cartao' ? dayOrNull('acFechamento') : null;
+  const vencimento = tipo==='cartao' ? dayOrNull('acVencimento') : null;
   const bank = document.getElementById('acBank').value;
   const principal = document.getElementById('acPrincipal').checked;
   let accounts = await getAccounts();
   if (principal) accounts.forEach(a=>a.principal=false);
   if (editingAccountId){
     const a = accounts.find(x=>x.id===editingAccountId);
-    if (a){ a.label=label; a.tipo=tipo; a.saldo=saldo; a.limite=limite; a.fatura=fatura; a.bank=bank; a.principal=principal; }
+    if (a){ a.label=label; a.tipo=tipo; a.saldo=saldo; a.limite=limite; a.fatura=fatura; a.fechamento=fechamento; a.vencimento=vencimento; a.bank=bank; a.principal=principal; }
   } else {
-    accounts.push({ id: genId(), label, tipo, saldo, limite, fatura, bank, principal, createdAt: Date.now() });
+    accounts.push({ id: genId(), label, tipo, saldo, limite, fatura, fechamento, vencimento, bank, principal, createdAt: Date.now() });
   }
   await storeSet('accounts_v2', accounts);
   document.getElementById('accountModalOverlay').classList.remove('open');
@@ -2602,6 +2666,8 @@ function openAccountEdit(acc){
   document.getElementById('acSaldo').value = acc.saldo || 0;
   document.getElementById('acLimite').value = acc.limite || 0;
   document.getElementById('acFatura').value = acc.fatura || 0;
+  document.getElementById('acFechamento').value = acc.fechamento || '';
+  document.getElementById('acVencimento').value = acc.vencimento || '';
   document.getElementById('acBank').value = acc.bank;
   document.getElementById('acPrincipal').checked = !!acc.principal;
   toggleAccountFields(acc.tipo || 'conta');
@@ -2957,22 +3023,37 @@ async function renderFinance(){
     const accBox = document.getElementById('accountLines');
     if (accounts.length===0){ accBox.innerHTML = emptyCta('Cadastre suas contas e cartões pra acompanhar saldo e fatura.', '+ Adicionar conta', 'btnOpenAccModal'); }
     else {
-      accBox.innerHTML = accounts.map(a=>{
+      accBox.innerHTML = accounts.map((a,idx)=>{
         const isCartao = a.tipo==='cartao';
         const valHtml = isCartao
           ? `<div class="val" style="color:var(--brick)">${fmtMoney(a.fatura)}</div>`
           : `<div class="val">${fmtMoney(a.saldo)}</div>`;
-        const subHtml = isCartao
-          ? `Cartão de crédito · limite ${fmtMoney(a.limite)}`
-          : bankById(a.bank).name;
+        let subHtml;
+        if (isCartao){
+          const dias = [a.fechamento?('fecha dia '+a.fechamento):'', a.vencimento?('vence dia '+a.vencimento):''].filter(Boolean).join(' · ');
+          subHtml = `${bankById(a.bank).name} · limite ${fmtMoney(a.limite)}${dias?' · '+dias:''}`;
+        } else subHtml = bankById(a.bank).name;
         return `<div class="acccard" data-id="${a.id}">
-          ${bankAvatarHtml(a.bank)}
+          <div class="bankavatar acc-logo">
+            <img src="assets/bancos/${bankById(a.bank).id}.svg" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            <div class="fallback-initials" style="display:none;background:${bankColor(bankById(a.bank))}">${bankInitials(bankById(a.bank))}</div>
+          </div>
           <div class="info"><div class="ttl">${esc(a.label)} ${a.principal?'<span class="badge b-principal">Principal</span>':''}</div>
             <div class="sub">${subHtml}</div>
           </div>
-          ${valHtml}
+          <div class="accright">
+            ${valHtml}
+            <div class="accacts">
+              <button class="accact" data-act="up" data-id="${a.id}" title="Subir" ${idx===0?'disabled':''}>↑</button>
+              <button class="accact" data-act="down" data-id="${a.id}" title="Descer" ${idx===accounts.length-1?'disabled':''}>↓</button>
+              <button class="accact ${a.principal?'on':''}" data-act="star" data-id="${a.id}" title="Tornar principal">★</button>
+              <button class="accact" data-act="edit" data-id="${a.id}" title="Editar">✎</button>
+              <button class="accact danger" data-act="del" data-id="${a.id}" title="Excluir">🗑</button>
+            </div>
+          </div>
         </div>`;
       }).join('');
+      accBox.querySelectorAll('.accact').forEach(btn=> btn.onclick = (ev)=>{ ev.stopPropagation(); accountAction(btn.dataset.act, btn.dataset.id); });
       accBox.querySelectorAll('.acccard').forEach(card=>{
         card.onclick = ()=>{ const a = accounts.find(x=>x.id===card.dataset.id); if (a) openAccountEdit(a); };
       });
@@ -3002,10 +3083,11 @@ async function renderFinance(){
           else if (!active) sub = 'expirou em ' + l.endDate.split('-').reverse().join('/');
           else { const days = Math.ceil((new Date(l.endDate+'T00:00:00') - now)/86400000); sub = 'até ' + l.endDate.split('-').reverse().join('/') + ' · ' + days + ' dias restantes'; }
         } else { sub = TYPE_LABEL[l.type]; }
+        const payTxt = l.payday ? 'recebe todo dia ' + l.payday : '';
         const regDate = l.createdAt ? new Date(l.createdAt).toLocaleDateString('pt-BR') : '';
         return `<div class="inccard ${!active?'inactive':''}" data-id="${l.id}">
           <div class="typedot b-${l.type}"></div>
-          <div class="info"><div class="ttl">${esc(l.label)}</div><div class="sub ${!active?'expired':''}">${sub}${regDate?' · cadastrada em '+regDate:''}</div></div>
+          <div class="info"><div class="ttl">${esc(l.label)}</div><div class="sub ${!active?'expired':''}">${sub}${payTxt?' · '+payTxt:''}${regDate?' · cadastrada em '+regDate:''}</div></div>
           <div class="val">${fmtMoney(l.value)}</div>
         </div>`;
       }).join('');
@@ -3884,7 +3966,19 @@ function enhanceDateTimeInputs(){
 enhanceSelects();
 enhanceDateTimeInputs();
 
-document.getElementById('fabNew').onclick = ()=> document.getElementById('btnOpenExpModal').click();
+const FAB_OPENERS = { expense:'btnOpenExpModal', income:'btnOpenIncModal', account:'btnOpenAccModal', task:'btnNewTask' };
+function closeFabMenu(){ document.getElementById('fabMenu').classList.remove('open'); document.getElementById('fabNew').classList.remove('open'); }
+document.getElementById('fabNew').onclick = (ev)=>{
+  ev.stopPropagation();
+  const menu = document.getElementById('fabMenu');
+  const open = !menu.classList.contains('open');
+  menu.classList.toggle('open', open);
+  document.getElementById('fabNew').classList.toggle('open', open);
+};
+document.querySelectorAll('#fabMenu .fab-item').forEach(btn=>{
+  btn.onclick = (ev)=>{ ev.stopPropagation(); closeFabMenu(); document.getElementById(FAB_OPENERS[btn.dataset.fab]).click(); };
+});
+document.addEventListener('click', (e)=>{ if (!e.target.closest('#fabMenu') && !e.target.closest('#fabNew')) closeFabMenu(); });
 
 /* modais: Esc fecha, clique no fundo fecha, foco no primeiro campo, Enter salva */
 document.querySelectorAll('.modal-overlay').forEach(ov=>{
