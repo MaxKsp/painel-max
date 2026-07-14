@@ -1,9 +1,10 @@
 {
   "id": "phase-14",
   "title": "Extract Finance anomaly detection",
-  "description": "Extract only the pure detectAnomalies calculation from assets/app.js into a dedicated client-side script, preserving thresholds, sorting, expense shapes, rendering, dismissal state, public endpoints, and all current Finance behavior.",
+  "description": "Extract only the pure detectAnomalies calculation from assets/app.js into app/Modules/Finance/Frontend/finance-anomaly-detection.js as the canonical source, publish a byte-identical copy at assets/finance-anomaly-detection.js without a bundler or required build step, and preserve thresholds, sorting, expense shapes, rendering, anomaly dismissal persistence, public endpoints, deployment, and all current Finance behavior.",
   "allowedFiles": [
     "assets/app.js",
+    "app/Modules/Finance/Frontend/finance-anomaly-detection.js",
     "assets/finance-anomaly-detection.js",
     "index.php",
     "tests/js/finance_anomaly_detection_test.js",
@@ -11,7 +12,13 @@
   ],
   "forbiddenFiles": [
     "api/",
-    "app/Modules/Finance/",
+    "app/Modules/Finance/FinanceApi.php",
+    "app/Modules/Finance/FinanceAuxiliaryKv.php",
+    "app/Modules/Finance/FinanceDataBootstrap.php",
+    "app/Modules/Finance/FinanceMigration.php",
+    "app/Modules/Finance/FinanceOfxPreview.php",
+    "app/Modules/Finance/FinanceRead.php",
+    "app/Modules/Finance/FinanceWrite.php",
     "finance.php",
     "ofx.php",
     "db.php",
@@ -21,7 +28,11 @@
     "assets/pay-fatura-account.js",
     "assets/account-transfer.js",
     "assets/ofx-import-confirmation.js",
-    "automation/",
+    "automation/README.md",
+    "automation/phases/phase-13.json",
+    "automation/prompts/",
+    "automation/runs/",
+    "automation/schemas/",
     "scripts/"
   ],
   "phpTests": [
@@ -32,13 +43,15 @@
     "node tests/js/pay_fatura_account_test.js",
     "node tests/js/account_transfer_test.js",
     "node tests/js/ofx_import_confirmation_test.js",
-    "node tests/js/finance_anomaly_detection_test.js"
+    "node tests/js/finance_anomaly_detection_test.js",
+    "powershell.exe -NoProfile -NonInteractive -Command \"$sourceHash = (Get-FileHash app/Modules/Finance/Frontend/finance-anomaly-detection.js -Algorithm SHA256).Hash; $assetHash = (Get-FileHash assets/finance-anomaly-detection.js -Algorithm SHA256).Hash; if ($sourceHash -ne $assetHash) { throw 'Frontend source and public asset differ.' }\""
   ],
   "phpLint": [
     "C:\\Users\\Max\\tools\\php\\php.exe -l index.php"
   ],
   "jsLint": [
     "node --check assets/app.js",
+    "node --check app/Modules/Finance/Frontend/finance-anomaly-detection.js",
     "node --check assets/finance-anomaly-detection.js",
     "node --check tests/js/finance_anomaly_detection_test.js"
   ],
