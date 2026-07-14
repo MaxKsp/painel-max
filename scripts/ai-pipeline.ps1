@@ -28,6 +28,8 @@ param(
 
     [int]$MaxFixAttempts = 2,
 
+    [double]$TestOnlyTolerance = 1e-9,
+
     [int]$ArchitectTimeoutSeconds = 300,
 
     [int]$ImplementerTimeoutSeconds = 900,
@@ -986,47 +988,54 @@ function Invoke-CodexReview {
         [string]$SchemaPath
     )
 
-    $prompt = Get-PromptText -TemplatePath (Join-Path $RepoRoot 'automation/prompts/reviewer.md') -PhaseJson $PhaseJson -PlanJson $PlanJson
-    if ($GeneratedPhaseDefinition) {
-        $prompt += "`n`nThe generated orchestration file $GeneratedPhaseDefinition is not implementation scope. Ignore that file and review only the phase allowlist diff."
-    }
-    $promptPath = Join-Path $RunDirectory 'reviewer-prompt.txt'
     $reviewOutputPath = Join-Path $RunDirectory 'review.json'
-    $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
     $codexCmd = Resolve-AgentCommandPath -Name 'codex'
-    $codexArgs = @(
+    $reviewArgs = @(
         'exec'
     )
 
     if (-not $UseCodexUserConfig) {
-        $codexArgs += '--ignore-user-config'
-        $codexArgs += '--ephemeral'
+        $reviewArgs += '--ignore-user-config'
+        $reviewArgs += '--ephemeral'
     }
 
-    $codexArgs += @(
+    $reviewArgs += @(
         '--sandbox', 'read-only',
         '--cd', $RepoRoot,
-        'review',
-        '--uncommitted',
         '--output-last-message', $reviewOutputPath,
         '--output-schema', $SchemaPath,
-        '-'
+        'review',
+        '--uncommitted'
     )
-    $result = Invoke-NativeProcess `
+    $null = Invoke-NativeProcess `
         -StageName 'Reviewer' `
         -FilePath $codexCmd `
-        -ArgumentList $codexArgs `
+        -ArgumentList $reviewArgs `
         -RunDirectory $RunDirectory `
         -TimeoutSeconds $ReviewerTimeoutSeconds `
-        -HeartbeatIntervalSeconds $HeartbeatSeconds `
-        -StandardInputText $prompt
+        -HeartbeatIntervalSeconds $HeartbeatSeconds
 
     if (-not (Test-Path -LiteralPath $reviewOutputPath)) {
         throw "Codex review did not create output file: $reviewOutputPath"
     }
 
     $reviewText = (Get-Content -LiteralPath $reviewOutputPath -Raw).Trim()
+    try {
+        $reviewObject = $reviewText | ConvertFrom-Json
+    } catch {
+        throw "Codex review output is not valid JSON: $reviewOutputPath"
+    }
+    $requiredReviewProperties = @('approved','blockers','warnings','filesReviewed','recommendedCommitMessage')
+    foreach ($requiredReviewProperty in $requiredReviewProperties) {
+        if (-not ($reviewObject.PSObject.Properties.Name -contains $requiredReviewProperty)) {
+            throw "Codex review output does not match schema; missing: $requiredReviewProperty"
+        }
+    }
+    $unexpectedReviewProperties = @($reviewObject.PSObject.Properties.Name | Where-Object { $requiredReviewProperties -notcontains $_ })
+    if ($unexpectedReviewProperties.Count -gt 0) {
+        throw "Codex review output does not match schema; unexpected: $($unexpectedReviewProperties -join ', ')"
+    }
     $reviewText | Out-File -LiteralPath (Join-Path $RunDirectory 'review.txt') -Encoding utf8
     return $reviewText
 }
@@ -1065,28 +1074,175 @@ $($Blockers -join [Environment]::NewLine)
     ) -RunDirectory $RunDirectory -TimeoutSeconds $ImplementerTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
 }
 
-function Get-ValidationFailureGuidance {
-    param([object[]]$FailedItems)
+function Get-TestFilesFromFailures {
+    param([object[]]$FailedItems, $PhaseObject)
 
-    $failureText = @($FailedItems | ForEach-Object { "$($_.stdout)`n$($_.stderr)" }) -join "`n"
-    $guidance = New-Object System.Collections.Generic.List[string]
-    $testOnly = $false
+    $phaseTests = @($PhaseObject.allowedFiles | Where-Object { $_.ToString().Replace('\', '/').StartsWith('tests/') } | ForEach-Object { $_.ToString().Replace('\', '/') })
+    $testFiles = @()
+    foreach ($failure in $FailedItems) {
+        $failureText = "$($failure.command)`n$($failure.stdout)`n$($failure.stderr)".Replace('\', '/')
+        foreach ($testFile in $phaseTests) {
+            if ($failureText.IndexOf($testFile, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $testFiles += $testFile
+            }
+        }
+    }
+    return @($testFiles | Sort-Object -Unique)
+}
+
+function Get-RelatedProductionFiles {
+    param([object[]]$FailedItems, $PhaseObject, [string[]]$TestFiles)
+
+    $failureText = @($FailedItems | ForEach-Object { "$($_.command)`n$($_.stdout)`n$($_.stderr)" }) -join "`n"
+    $normalizedTestNames = @($TestFiles | ForEach-Object {
+        ([System.IO.Path]::GetFileNameWithoutExtension($_) -replace '_test$', '' -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+    })
+    $related = @()
+    foreach ($allowedFileValue in @($PhaseObject.allowedFiles)) {
+        $allowedFile = $allowedFileValue.ToString().Replace('\', '/')
+        if ($allowedFile.StartsWith('tests/')) { continue }
+        $baseName = ([System.IO.Path]::GetFileNameWithoutExtension($allowedFile) -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+        $mentioned = $failureText.Replace('\', '/').IndexOf($allowedFile, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+        $nameRelated = @($normalizedTestNames | Where-Object { $_ -and ($_.Contains($baseName) -or $baseName.Contains($_)) }).Count -gt 0
+        if ($mentioned -or $nameRelated) {
+            $related += $allowedFile
+        }
+    }
+    return @($related | Sort-Object -Unique)
+}
+
+function Get-ValidationFailureClassification {
+    param(
+        [object[]]$FailedItems,
+        $PhaseObject,
+        [double]$Tolerance = 1e-9
+    )
+
+    $failureText = @($FailedItems | ForEach-Object { "$($_.command)`n$($_.stdout)`n$($_.stderr)" }) -join "`n"
+    $testFiles = @(Get-TestFilesFromFailures -FailedItems $FailedItems -PhaseObject $PhaseObject)
+    $classification = 'unknown'
+    $expectedCorrection = 'No safe automatic correction was identified.'
 
     if ($failureText -match 'Values have same structure but are not reference-equal') {
-        $testOnly = $true
-        $guidance.Add('Known failure: Node vm cross-realm assertion. Change only the test. Normalize arrays with Array.from() and objects with Object.assign({}, value), spread, or an equivalent normalization. Do not change production logic.')
+        $classification = 'test-only'
+        $expectedCorrection = 'Normalize cross-realm arrays with Array.from() and objects with Object.assign({}, value), spread, or equivalent test-only normalization. Do not alter production.'
+    } elseif ($failureText -match '(?i)stub|harness' -and $failureText -match '(?i)real implementation|implementation real|diverg') {
+        $classification = 'test-only'
+        $expectedCorrection = 'Align only the test stub or harness with the real implementation. Do not alter production.'
+    } elseif ($failureText -match 'MODULE_NOT_FOUND' -and $testFiles.Count -gt 0) {
+        $classification = 'test-only'
+        $expectedCorrection = 'Correct only the inconsistent test module name or path. Do not create duplicate artifacts or alter production.'
+    } else {
+        $numberMatch = [regex]::Match($failureText, '(?ims)(?:Actual:\s*)?(-?\d+(?:\.\d+)?)\s*(?:!==|Expected:\s*)(-?\d+(?:\.\d+)?)')
+        if (-not $numberMatch.Success) {
+            $numberMatch = [regex]::Match($failureText, '(?ims)Actual:\s*(-?\d+(?:\.\d+)?).*?Expected:\s*(-?\d+(?:\.\d+)?)')
+        }
+        if (-not $numberMatch.Success) {
+            $numberMatch = [regex]::Match($failureText, '(?m)^\+\s*(-?\d+(?:\.\d+)?)\s*$\s*^-\s*(-?\d+(?:\.\d+)?)\s*$')
+        }
+        if ($numberMatch.Success) {
+            $actual = [double]::Parse($numberMatch.Groups[1].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+            $expected = [double]::Parse($numberMatch.Groups[2].Value, [System.Globalization.CultureInfo]::InvariantCulture)
+            $difference = [Math]::Abs($actual - $expected)
+            $scale = [Math]::Max(1.0, [Math]::Abs($expected))
+            if ($difference -le ($Tolerance * $scale)) {
+                $classification = 'test-only'
+                $expectedCorrection = "Corrija exclusivamente o teste usando tolerancia numerica, por exemplo: assert.ok(Math.abs(actual - expected) < $Tolerance). Nao arredonde nem altere producao."
+            } else {
+                $classification = 'production-possible'
+                $expectedCorrection = 'Investigate the functional mismatch using only files directly related to the failed test and preserve the phase contracts.'
+            }
+        } elseif ($failureText -match '(?i)(TypeError|ReferenceError|RangeError|SyntaxError|regression confirmed|functional mismatch|unexpected result)') {
+            $classification = 'production-possible'
+            $expectedCorrection = 'Investigate the production exception or confirmed functional regression using only directly related phase files.'
+        }
     }
-    if ($failureText -match '\d+\.\d{10,}\s*!==\s*\d+' -or $failureText -match 'IEEE-?754|floating.?point|precision') {
-        $testOnly = $true
-        $guidance.Add('Known failure: residual IEEE-754 floating-point precision. Change only the test and use a numeric tolerance such as assert.ok(Math.abs(actual - expected) < 1e-9). Do not round or change production unless the functional contract proves rounding is required.')
+
+    $allowedFiles = @($testFiles)
+    if ($classification -eq 'production-possible') {
+        $allowedFiles += @(Get-RelatedProductionFiles -FailedItems $FailedItems -PhaseObject $PhaseObject -TestFiles $testFiles)
+        $allowedFiles = @($allowedFiles | Sort-Object -Unique)
+        if (@($allowedFiles | Where-Object { -not $_.StartsWith('tests/') }).Count -eq 0) {
+            $classification = 'unknown'
+            $expectedCorrection = 'A possible production failure was detected, but no directly related production file could be identified safely.'
+            $allowedFiles = @()
+        }
     }
-    if ($failureText -match 'MODULE_NOT_FOUND') {
-        $guidance.Add('Known failure: MODULE_NOT_FOUND. First compare the expected name in the phase JSON with the file actually created. Correct inconsistent test/phase naming only; do not create duplicate artifacts.')
+    if ($classification -eq 'test-only' -and $testFiles.Count -eq 0) {
+        $classification = 'unknown'
+        $expectedCorrection = 'The failure resembles a test-only issue, but no associated test file could be identified safely.'
+        $allowedFiles = @()
     }
 
     return [pscustomobject]@{
-        lines = @($guidance)
-        testOnly = $testOnly
+        classification = $classification
+        allowedFiles = @($allowedFiles)
+        expectedCorrection = $expectedCorrection
+        failedCommands = @($FailedItems | ForEach-Object { $_.command })
+    }
+}
+
+function New-FixBackup {
+    param([string]$RepoRoot, [string]$RunDirectory, [int]$AttemptNumber, $PhaseObject)
+
+    $backupRoot = Join-Path $RunDirectory ("fix-backup-attempt-{0}" -f $AttemptNumber)
+    $filesRoot = Join-Path $backupRoot 'files'
+    New-Item -ItemType Directory -Path $filesRoot -Force | Out-Null
+    $repoFiles = @(& git -c core.quotepath=false ls-files --cached --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to enumerate repository files for correction backup.' }
+    $repoFiles += @($PhaseObject.allowedFiles | ForEach-Object { $_.ToString().Replace('\', '/') })
+    $changedFilesBefore = @(Get-ChangedFiles -ExcludePaths @($GeneratedPhaseDefinition))
+    ConvertTo-Json -InputObject $changedFilesBefore -Depth 3 | Out-File -LiteralPath (Join-Path $backupRoot 'changed-files-before.json') -Encoding utf8
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($fileValue in @($repoFiles | Sort-Object -Unique)) {
+        $file = $fileValue.ToString().Replace('\', '/').TrimStart('.', '/')
+        if (-not $file) { continue }
+        $sourcePath = Join-Path $RepoRoot $file
+        $exists = Test-Path -LiteralPath $sourcePath -PathType Leaf
+        [void]$entries.Add([pscustomobject]@{ path = $file; existed = $exists })
+        if ($exists) {
+            $backupPath = Join-Path $filesRoot $file
+            $backupParent = Split-Path -Parent $backupPath
+            New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
+            Copy-Item -LiteralPath $sourcePath -Destination $backupPath -Force
+        }
+    }
+    $manifestPath = Join-Path $backupRoot 'manifest.json'
+    $entryArray = $entries.ToArray()
+    ConvertTo-Json -InputObject $entryArray -Depth 4 | Out-File -LiteralPath $manifestPath -Encoding utf8
+    return [pscustomobject]@{
+        root = $backupRoot
+        filesRoot = $filesRoot
+        manifestPath = $manifestPath
+        snapshot = Get-WorkspaceSnapshot -ExcludePaths @($GeneratedPhaseDefinition)
+    }
+}
+
+function Restore-FixBackup {
+    param($Backup, [string[]]$DeltaFiles, [string]$RepoRoot)
+
+    $entries = Get-Content -LiteralPath $Backup.manifestPath -Raw | ConvertFrom-Json
+    foreach ($file in $DeltaFiles) {
+        $targetPath = Join-Path $RepoRoot $file
+        $entry = $null
+        foreach ($candidate in $entries) {
+            if ($candidate.path.ToString().Equals($file, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $entry = $candidate
+                break
+            }
+        }
+        $entryExisted = $false
+        if ($null -ne $entry) {
+            $entryExisted = [System.Convert]::ToBoolean($entry.existed)
+        }
+        if ($entryExisted) {
+            $backupPath = Join-Path $Backup.filesRoot $file
+            $targetParent = Split-Path -Parent $targetPath
+            New-Item -ItemType Directory -Path $targetParent -Force | Out-Null
+            Copy-Item -LiteralPath $backupPath -Destination $targetPath -Force
+        } elseif (Test-Path -LiteralPath $targetPath) {
+            Remove-Item -LiteralPath $targetPath -Force
+        }
     }
 }
 
@@ -1115,10 +1271,12 @@ function Invoke-PhaseValidationAttempt {
         [string]$PowerShellExecutable,
         [string[]]$ValidationArguments,
         [string]$RunDirectory,
-        [int]$AttemptNumber
+        [int]$AttemptNumber,
+        [string]$ResultPrefix = 'validation-attempt',
+        [switch]$SkipFailureArtifact
     )
 
-    $validationPath = Join-Path $RunDirectory ("validation-attempt-{0}.json" -f $AttemptNumber)
+    $validationPath = Join-Path $RunDirectory ("{0}-{1}.json" -f $ResultPrefix, $AttemptNumber)
     $attemptArguments = @($ValidationArguments + @('-ResultPath', $validationPath))
     $null = & $PowerShellExecutable @attemptArguments
     $exitCode = $LASTEXITCODE
@@ -1132,7 +1290,7 @@ function Invoke-PhaseValidationAttempt {
     } catch {
         throw "Validation did not produce valid JSON at $validationPath. ExitCode=$exitCode"
     }
-    if ($exitCode -ne 0) {
+    if ($exitCode -ne 0 -and -not $SkipFailureArtifact) {
         $failedPath = Join-Path $RunDirectory ("validation-failures-attempt-{0}.json" -f $AttemptNumber)
         ConvertTo-Json -InputObject @($validationObject.failed) -Depth 8 | Out-File -LiteralPath $failedPath -Encoding utf8
     }
@@ -1150,24 +1308,42 @@ function Invoke-ValidationCorrection {
         [string]$RunDirectory,
         $PhaseObject,
         [object[]]$FailedItems,
-        [int]$AttemptNumber
+        [int]$AttemptNumber,
+        $Classification
     )
+
+    $classification = $Classification
+    if ($null -eq $classification) {
+        $classification = Get-ValidationFailureClassification -FailedItems $FailedItems -PhaseObject $PhaseObject -Tolerance $TestOnlyTolerance
+    }
+    if ($classification.classification -eq 'unknown') {
+        return [pscustomobject]@{
+            status = 'unknown'
+            classification = $classification
+            changedFiles = @()
+        }
+    }
 
     $changedBefore = @(Get-ChangedFiles -ExcludePaths @($GeneratedPhaseDefinition))
     Assert-FilesWithinAllowlist -Files $changedBefore -PhaseObject $PhaseObject
-    $snapshotBefore = Get-WorkspaceSnapshot -ExcludePaths @($GeneratedPhaseDefinition)
-    $guidance = Get-ValidationFailureGuidance -FailedItems $FailedItems
+    $backup = New-FixBackup -RepoRoot $RepoRoot -RunDirectory $RunDirectory -AttemptNumber $AttemptNumber -PhaseObject $PhaseObject
     $failedCommands = @($FailedItems | ForEach-Object {
         [ordered]@{ command = $_.command; stdout = $_.stdout; stderr = $_.stderr }
     }) | ConvertTo-Json -Depth 6
+    $forbiddenFiles = @($PhaseObject.allowedFiles | ForEach-Object { $_.ToString().Replace('\', '/') } | Where-Object { @($classification.allowedFiles) -notcontains $_ })
+    $forbiddenFiles += @('app/', 'assets/', 'index.php', 'api/', 'schema.sql', 'migrations/')
+    if ($classification.classification -eq 'production-possible') {
+        $forbiddenFiles = @($PhaseObject.allowedFiles | ForEach-Object { $_.ToString().Replace('\', '/') } | Where-Object { @($classification.allowedFiles) -notcontains $_ })
+        $forbiddenFiles += @($PhaseObject.forbiddenFiles)
+    }
+    $forbiddenFiles = @($forbiddenFiles | Sort-Object -Unique)
 
     $template = Get-Content -LiteralPath (Join-Path $RepoRoot 'automation/prompts/validation-fix.md') -Raw
-    $prompt = $template.Replace('{{PHASE_ID}}', $PhaseObject.id.ToString())
-    $prompt = $prompt.Replace('{{ALLOWLIST}}', (@($PhaseObject.allowedFiles) -join [Environment]::NewLine))
-    $prompt = $prompt.Replace('{{DENYLIST}}', (@($PhaseObject.forbiddenFiles) -join [Environment]::NewLine))
-    $prompt = $prompt.Replace('{{CHANGED_FILES}}', ($changedBefore -join [Environment]::NewLine))
+    $prompt = $template.Replace('{{CLASSIFICATION}}', $classification.classification)
+    $prompt = $prompt.Replace('{{ALLOWED_FILES}}', (@($classification.allowedFiles) -join [Environment]::NewLine))
+    $prompt = $prompt.Replace('{{FORBIDDEN_FILES}}', ($forbiddenFiles -join [Environment]::NewLine))
     $prompt = $prompt.Replace('{{FAILED_COMMANDS}}', $failedCommands)
-    $prompt = $prompt.Replace('{{KNOWN_GUIDANCE}}', (@($guidance.lines) -join [Environment]::NewLine))
+    $prompt = $prompt.Replace('{{EXPECTED_CORRECTION}}', $classification.expectedCorrection)
     $promptPath = Join-Path $RunDirectory ("fix-prompt-attempt-{0}.txt" -f $AttemptNumber)
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
@@ -1190,21 +1366,40 @@ function Invoke-ValidationCorrection {
         -HeartbeatIntervalSeconds $HeartbeatSeconds `
         -StandardInputText $prompt
 
-    $changedAfter = @(Get-ChangedFiles -ExcludePaths @($GeneratedPhaseDefinition))
-    Assert-FilesWithinAllowlist -Files $changedAfter -PhaseObject $PhaseObject
     $snapshotAfter = Get-WorkspaceSnapshot -ExcludePaths @($GeneratedPhaseDefinition)
-    $filesChangedByFix = @(Get-SnapshotChangedFiles -Before $snapshotBefore -After $snapshotAfter)
+    $filesChangedByFix = @(Get-SnapshotChangedFiles -Before $backup.snapshot -After $snapshotAfter)
     if ($filesChangedByFix.Count -eq 0) {
-        throw "Claude made no workspace change during fix attempt $AttemptNumber. Stopping to avoid an infinite retry loop."
-    }
-    if ($guidance.testOnly) {
-        $productionChanges = @($filesChangedByFix | Where-Object { -not $_.StartsWith('tests/', [System.StringComparison]::OrdinalIgnoreCase) })
-        if ($productionChanges.Count -gt 0) {
-            throw "Test-only validation failure changed production files: $($productionChanges -join ', ')"
+        return [pscustomobject]@{
+            status = 'no-change'
+            classification = $classification
+            changedFiles = @()
         }
     }
 
-    return @($filesChangedByFix)
+    $unauthorizedFiles = @($filesChangedByFix | Where-Object { @($classification.allowedFiles) -notcontains $_ })
+    if ($unauthorizedFiles.Count -gt 0) {
+        Restore-FixBackup -Backup $backup -DeltaFiles $filesChangedByFix -RepoRoot $RepoRoot
+        $violationPath = Join-Path $RunDirectory ("fix-scope-violation-attempt-{0}.json" -f $AttemptNumber)
+        [ordered]@{
+            classification = $classification.classification
+            allowedFiles = @($classification.allowedFiles)
+            changedFiles = @($filesChangedByFix)
+            unauthorizedFiles = @($unauthorizedFiles)
+            rolledBack = $true
+        } | ConvertTo-Json -Depth 5 | Out-File -LiteralPath $violationPath -Encoding utf8
+        return [pscustomobject]@{
+            status = 'violation-rolled-back'
+            classification = $classification
+            changedFiles = @($filesChangedByFix)
+            unauthorizedFiles = @($unauthorizedFiles)
+        }
+    }
+
+    return [pscustomobject]@{
+        status = 'changed'
+        classification = $classification
+        changedFiles = @($filesChangedByFix)
+    }
 }
 
 function Write-Summary {
@@ -1316,6 +1511,7 @@ if ($AutoNextPhase) {
             '-File', $PSCommandPath,
             '-Phase', $phaseRelativePath,
             '-MaxFixAttempts', $MaxFixAttempts,
+            '-TestOnlyTolerance', $TestOnlyTolerance,
             '-ArchitectTimeoutSeconds', $ArchitectTimeoutSeconds,
             '-ImplementerTimeoutSeconds', $ImplementerTimeoutSeconds,
             '-ClaudePermissionMode', $ClaudePermissionMode,
@@ -1480,15 +1676,43 @@ try {
             throw 'Scope validation failed; automatic scope expansion is prohibited.'
         }
 
+        $failureClassification = Get-ValidationFailureClassification -FailedItems $failedItems -PhaseObject $phaseObject -Tolerance $TestOnlyTolerance
+        if ($failureClassification.classification -eq 'unknown') {
+            $failures.Add("Validation failure classification is unknown: $($failureClassification.expectedCorrection)")
+            throw 'Unknown validation failure requires human review; Claude was not called.'
+        }
+
         $validationFixAttempts++
         $attempts++
         Write-Host ("[Fix {0}/{1}] preparing targeted correction" -f $validationFixAttempts, $MaxFixAttempts)
         Write-Host ("[Fix {0}/{1}] Claude running..." -f $validationFixAttempts, $MaxFixAttempts)
-        $fixChangedFiles = @(Invoke-ValidationCorrection -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseObject $phaseObject -FailedItems $failedItems -AttemptNumber $validationFixAttempts)
+        $fixResult = Invoke-ValidationCorrection -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseObject $phaseObject -FailedItems $failedItems -AttemptNumber $validationFixAttempts -Classification $failureClassification
+        if ($fixResult.status -eq 'no-change') {
+            throw "Claude made no workspace change during fix attempt $validationFixAttempts. Stopping to avoid an infinite retry loop."
+        }
+        if ($fixResult.status -eq 'violation-rolled-back') {
+            Write-Host ("[Fix {0}/{1}] unauthorized changes rolled back: {2}" -f $validationFixAttempts, $MaxFixAttempts, ($fixResult.unauthorizedFiles -join ', '))
+            $validationAction = Get-ValidationRetryAction -ExitCode $validationResult.exitCode -AttemptsUsed $validationFixAttempts -MaximumAttempts $MaxFixAttempts -FailedItems @($validationResult.data.failed)
+            continue
+        }
+        $fixChangedFiles = @($fixResult.changedFiles)
         Write-Host ("[Fix {0}/{1}] changed files: {2}" -f $validationFixAttempts, $MaxFixAttempts, ($fixChangedFiles -join ', '))
         Write-Host ("[Fix {0}/{1}] revalidating..." -f $validationFixAttempts, $MaxFixAttempts)
-        $validationAttemptNumber++
-        $validationResult = Invoke-PhaseValidationAttempt -PowerShellExecutable $powerShellExe -ValidationArguments $validationArgs -RunDirectory $runDirectory -AttemptNumber $validationAttemptNumber
+
+        $targetedPassed = $true
+        foreach ($failedCommand in @($failureClassification.failedCommands | Sort-Object -Unique)) {
+            $targetedArguments = @($validationArgs + @('-SingleCommand', $failedCommand))
+            $targetedResult = Invoke-PhaseValidationAttempt -PowerShellExecutable $powerShellExe -ValidationArguments $targetedArguments -RunDirectory $runDirectory -AttemptNumber $validationFixAttempts -ResultPrefix 'validation-specific-attempt' -SkipFailureArtifact
+            if ($targetedResult.exitCode -ne 0) {
+                $validationResult = $targetedResult
+                $targetedPassed = $false
+                break
+            }
+        }
+        if ($targetedPassed) {
+            $validationAttemptNumber++
+            $validationResult = Invoke-PhaseValidationAttempt -PowerShellExecutable $powerShellExe -ValidationArguments $validationArgs -RunDirectory $runDirectory -AttemptNumber $validationAttemptNumber
+        }
         if ($validationResult.exitCode -eq 0) {
             Write-Host ("[Fix {0}/{1}] validation passed" -f $validationFixAttempts, $MaxFixAttempts)
         }

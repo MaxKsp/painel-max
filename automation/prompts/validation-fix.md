@@ -1,20 +1,15 @@
-You are Claude Code applying one targeted validation correction.
+Classification: {{CLASSIFICATION}}
 
-Phase: {{PHASE_ID}}
+Files allowed for this correction:
+{{ALLOWED_FILES}}
 
-Allowlist:
-{{ALLOWLIST}}
-
-Denylist:
-{{DENYLIST}}
-
-Currently changed files:
-{{CHANGED_FILES}}
+Files and paths forbidden for this correction:
+{{FORBIDDEN_FILES}}
 
 Failed commands with stdout and stderr:
 {{FAILED_COMMANDS}}
 
-Known failure guidance:
-{{KNOWN_GUIDANCE}}
+Expected correction:
+{{EXPECTED_CORRECTION}}
 
-Correct only the cause of the reported failure. Do not widen scope, modify files outside the allowlist, or make a commit. When the failure is exclusively in a test, do not alter production code.
+Correct only the reported cause and modify only the exact allowed files. Run only the failed test command. Stop without making a commit.

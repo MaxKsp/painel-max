@@ -7,6 +7,8 @@ param(
 
     [string]$ResultPath,
 
+    [string]$SingleCommand,
+
     [switch]$SkipScope,
 
     [string[]]$ExcludedFiles = @(),
@@ -445,6 +447,21 @@ if (-not $SkipScope) {
         Write-ValidationResult -Result $scopeSummary
         exit 1
     }
+}
+
+if ($SingleCommand) {
+    $results.Add((Invoke-LoggedCommand -Command $SingleCommand -Label 'targeted-validation' -OutputDirectory $RunDirectory -TimeoutSeconds $ValidationCommandTimeoutSeconds))
+    $targetedItems = @($results | ForEach-Object { $_ })
+    $targetedFailed = @($targetedItems | Where-Object { -not $_.passed })
+    $targetedSummary = [pscustomobject]@{
+        phaseId = $phaseObject.id
+        passed = ($targetedFailed.Count -eq 0)
+        results = $targetedItems
+        failed = @($targetedFailed)
+    }
+    Write-ValidationResult -Result $targetedSummary
+    if ($targetedFailed.Count -gt 0) { exit 1 }
+    exit 0
 }
 
 foreach ($command in @($phaseObject.phpTests)) {

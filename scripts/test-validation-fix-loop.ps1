@@ -4,9 +4,9 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (& git rev-parse --show-toplevel).Trim()
-if (-not $repoRoot) { throw 'Not inside the source repository.' }
-$pipelinePath = Join-Path $repoRoot 'scripts/ai-pipeline.ps1'
+$sourceRoot = (& git rev-parse --show-toplevel).Trim()
+if (-not $sourceRoot) { throw 'Not inside the source repository.' }
+$pipelinePath = Join-Path $sourceRoot 'scripts/ai-pipeline.ps1'
 $pipelineText = Get-Content -LiteralPath $pipelinePath -Raw
 $tokens = $null
 $errors = $null
@@ -20,66 +20,125 @@ function Get-PipelineFunctionDefinition {
     return $definition.Extent.Text
 }
 
-Invoke-Expression (Get-PipelineFunctionDefinition -Name 'Get-ValidationFailureGuidance')
-Invoke-Expression (Get-PipelineFunctionDefinition -Name 'Get-ValidationRetryAction')
-Invoke-Expression (Get-PipelineFunctionDefinition -Name 'Assert-FilesWithinAllowlist')
-
-function Invoke-ControlledRetry {
-    param($Failure, [string[]]$FilesChangedByCorrection)
-
-    $attempts = 0
-    $action = Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed $attempts -MaximumAttempts 2 -FailedItems @($Failure)
-    if ($action -ne 'retry') { throw 'Controlled validation failure did not enter retry.' }
-    $attempts++
-    $guidance = Get-ValidationFailureGuidance -FailedItems @($Failure)
-    if ($guidance.testOnly -and @($FilesChangedByCorrection | Where-Object { -not $_.StartsWith('tests/') }).Count -gt 0) {
-        throw 'Controlled test-only correction attempted to change production.'
-    }
-    $action = Get-ValidationRetryAction -ExitCode 0 -AttemptsUsed $attempts -MaximumAttempts 2 -FailedItems @()
-    return [pscustomobject]@{ attempts = $attempts; action = $action }
+foreach ($functionName in @(
+    'Get-ChangedFiles',
+    'Get-WorkspaceSnapshot',
+    'Get-SnapshotChangedFiles',
+    'Get-TestFilesFromFailures',
+    'Get-RelatedProductionFiles',
+    'Get-ValidationFailureClassification',
+    'Get-ValidationRetryAction',
+    'New-FixBackup',
+    'Restore-FixBackup'
+)) {
+    Invoke-Expression (Get-PipelineFunctionDefinition -Name $functionName)
 }
 
-$crossRealm = Get-ValidationFailureGuidance -FailedItems @([pscustomobject]@{ stdout = 'Values have same structure but are not reference-equal'; stderr = '' })
-if (-not $crossRealm.testOnly -or ($crossRealm.lines -join ' ') -notmatch 'Array\.from') {
-    throw 'Cross-realm failure was not classified as a test-only normalization fix.'
+$phase = [pscustomobject]@{
+    allowedFiles = @(
+        'app/Modules/Finance/Frontend/finance-period-calculation.js',
+        'assets/finance-period-calculation.js',
+        'tests/js/finance_period_calculation_test.js'
+    )
 }
-$crossRealmCycle = Invoke-ControlledRetry -Failure ([pscustomobject]@{ label = 'js-test-1'; stdout = 'Values have same structure but are not reference-equal'; stderr = '' }) -FilesChangedByCorrection @('tests/js/cross_realm_test.js')
-if ($crossRealmCycle.attempts -ne 1 -or $crossRealmCycle.action -ne 'review') { throw 'Cross-realm failure was not corrected on the first controlled retry.' }
-
-$floatingPoint = Get-ValidationFailureGuidance -FailedItems @([pscustomobject]@{ stdout = '1000.0000000000001 !== 1000'; stderr = '' })
-if (-not $floatingPoint.testOnly -or ($floatingPoint.lines -join ' ') -notmatch '1e-9') {
-    throw 'Floating-point failure was not classified as a test-only tolerance fix.'
+$ieeeFailure = [pscustomobject]@{
+    label = 'js-test-1'
+    command = 'node tests/js/finance_period_calculation_test.js'
+    stdout = "Actual: 1000.0000000000001`nExpected: 1000"
+    stderr = ''
 }
-$floatingPointCycle = Invoke-ControlledRetry -Failure ([pscustomobject]@{ label = 'js-test-1'; stdout = '1000.0000000000001 !== 1000'; stderr = '' }) -FilesChangedByCorrection @('tests/js/finance_period_calculation_test.js')
-if ($floatingPointCycle.attempts -ne 1 -or $floatingPointCycle.action -ne 'review') { throw 'Floating-point failure was not corrected on the first controlled retry.' }
+$ieee = Get-ValidationFailureClassification -FailedItems @($ieeeFailure) -PhaseObject $phase -Tolerance 1e-9
+if ($ieee.classification -ne 'test-only' -or @($ieee.allowedFiles).Count -ne 1 -or $ieee.allowedFiles[0] -ne 'tests/js/finance_period_calculation_test.js') {
+    throw 'IEEE-754 failure did not restrict correction to the associated test.'
+}
+if ($ieee.expectedCorrection -notmatch 'assert\.ok' -or $ieee.expectedCorrection -notmatch 'Nao arredonde') {
+    throw 'IEEE-754 guidance does not require tolerance without production rounding.'
+}
 
-$phase = [pscustomobject]@{ allowedFiles = @('tests/js/allowed_test.js') }
-Assert-FilesWithinAllowlist -Files @('tests/js/allowed_test.js') -PhaseObject $phase
-# Represents ResumePhase accepting an existing diff that is already in scope.
-Assert-FilesWithinAllowlist -Files @('tests/js/allowed_test.js') -PhaseObject $phase
-$outsideRejected = $false
+$crossRealmFailure = [pscustomobject]@{
+    label = 'js-test-1'; command = 'node tests/js/finance_period_calculation_test.js'
+    stdout = 'Values have same structure but are not reference-equal'; stderr = ''
+}
+$crossRealm = Get-ValidationFailureClassification -FailedItems @($crossRealmFailure) -PhaseObject $phase
+if ($crossRealm.classification -ne 'test-only' -or @($crossRealm.allowedFiles | Where-Object { -not $_.StartsWith('tests/') }).Count -gt 0) {
+    throw 'Cross-realm failure allowed a production file.'
+}
+
+$functionalFailure = [pscustomobject]@{
+    label = 'js-test-1'; command = 'node tests/js/finance_period_calculation_test.js'
+    stdout = 'Actual: 700'; stderr = 'Expected: 1000'
+}
+$functional = Get-ValidationFailureClassification -FailedItems @($functionalFailure) -PhaseObject $phase
+if ($functional.classification -ne 'production-possible' -or @($functional.allowedFiles | Where-Object { $_.StartsWith('app/') }).Count -ne 1) {
+    throw 'Confirmed functional mismatch did not authorize only related phase production files.'
+}
+
+$unknownFailure = [pscustomobject]@{ label = 'js-test-1'; command = 'node tests/js/finance_period_calculation_test.js'; stdout = 'unclassified failure'; stderr = '' }
+$unknown = Get-ValidationFailureClassification -FailedItems @($unknownFailure) -PhaseObject $phase
+if ($unknown.classification -ne 'unknown') { throw 'Unknown failure was classified for automatic Claude execution.' }
+
+if ((Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed 0 -MaximumAttempts 2 -FailedItems @($ieeeFailure)) -ne 'retry') { throw 'First retry was not allowed.' }
+if ((Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed 2 -MaximumAttempts 2 -FailedItems @($ieeeFailure)) -ne 'stop') { throw 'MaxFixAttempts was not enforced.' }
+if ($pipelineText.IndexOf("'-SingleCommand'") -lt 0 -or $pipelineText.IndexOf("ResultPrefix 'validation-specific-attempt'") -lt 0) {
+    throw 'Failed command is not validated before the complete suite.'
+}
+if ($pipelineText -notmatch 'Unknown validation failure requires human review; Claude was not called') {
+    throw 'Unknown failure does not stop before Claude.'
+}
+
+$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("validation-fix-loop-{0}" -f ([guid]::NewGuid().ToString('N')))
+$runDirectory = Join-Path $testRoot 'automation/runs/test'
+$originalLocation = Get-Location
+$script:GeneratedPhaseDefinition = ''
 try {
-    Assert-FilesWithinAllowlist -Files @('assets/app.js') -PhaseObject $phase
-} catch {
-    $outsideRejected = $true
-}
-if (-not $outsideRejected) { throw 'A file outside the allowlist was not rejected.' }
+    New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
+    Set-Location -LiteralPath $testRoot
+    & git init --quiet
+    & git config user.email 'automation-test@example.invalid'
+    & git config user.name 'Automation Test'
+    New-Item -ItemType Directory -Path 'app/Modules/Finance/Frontend','assets','tests/js',$runDirectory -Force | Out-Null
+    'head production' | Set-Content 'app/Modules/Finance/Frontend/finance-period-calculation.js' -Encoding utf8
+    'head production' | Set-Content 'assets/finance-period-calculation.js' -Encoding utf8
+    'head test' | Set-Content 'tests/js/finance_period_calculation_test.js' -Encoding utf8
+    & git add -- app assets tests
+    & git commit --quiet -m baseline
 
-$failure = [pscustomobject]@{ label = 'js-test-1' }
-if ((Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed 0 -MaximumAttempts 2 -FailedItems @($failure)) -ne 'retry') { throw 'First failed validation should retry.' }
-if ((Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed 2 -MaximumAttempts 2 -FailedItems @($failure)) -ne 'stop') { throw 'MaxFixAttempts was not respected.' }
-if ((Get-ValidationRetryAction -ExitCode 0 -AttemptsUsed 1 -MaximumAttempts 2 -FailedItems @()) -ne 'review') { throw 'Approved validation did not proceed to review.' }
-$scopeFailure = [pscustomobject]@{ label = 'scope' }
-if ((Get-ValidationRetryAction -ExitCode 1 -AttemptsUsed 0 -MaximumAttempts 2 -FailedItems @($scopeFailure)) -ne 'reject-scope') { throw 'Scope failure was not rejected immediately.' }
+    # Existing phase implementation must survive rollback; it is intentionally different from HEAD.
+    'phase implementation' | Set-Content 'app/Modules/Finance/Frontend/finance-period-calculation.js' -Encoding utf8
+    'phase implementation' | Set-Content 'assets/finance-period-calculation.js' -Encoding utf8
+    $backup = New-FixBackup -RepoRoot $testRoot -RunDirectory $runDirectory -AttemptNumber 1 -PhaseObject $phase
+    'bad correction' | Set-Content 'app/Modules/Finance/Frontend/finance-period-calculation.js' -Encoding utf8
+    'bad correction' | Set-Content 'assets/finance-period-calculation.js' -Encoding utf8
+    'test tolerance correction' | Set-Content 'tests/js/finance_period_calculation_test.js' -Encoding utf8
+    'new unauthorized file' | Set-Content 'assets/unauthorized.js' -Encoding utf8
+    $after = Get-WorkspaceSnapshot
+    $delta = @(Get-SnapshotChangedFiles -Before $backup.snapshot -After $after)
+    Restore-FixBackup -Backup $backup -DeltaFiles $delta -RepoRoot $testRoot
 
-if ($pipelineText -notmatch '\[string\]\$ResumePhase' -or $pipelineText -notmatch 'ResumePhase starting validation') {
-    throw 'ResumePhase with an existing diff is not wired into validation.'
+    if ((Get-Content 'app/Modules/Finance/Frontend/finance-period-calculation.js' -Raw).Trim() -ne 'phase implementation') {
+        throw 'Rollback restored tracked production to HEAD instead of the pre-attempt phase implementation.'
+    }
+    if ((Get-Content 'assets/finance-period-calculation.js' -Raw).Trim() -ne 'phase implementation') {
+        throw 'Public asset phase implementation was not preserved by rollback.'
+    }
+    if (Test-Path 'assets/unauthorized.js') { throw 'New unauthorized file was not removed by rollback.' }
+    if ((Get-Content 'tests/js/finance_period_calculation_test.js' -Raw).Trim() -ne 'head test') {
+        throw 'Invalid attempt was not rolled back atomically.'
+    }
+
+    # A subsequent restricted attempt changes only the test and leaves production intact.
+    'test tolerance correction' | Set-Content 'tests/js/finance_period_calculation_test.js' -Encoding utf8
+    if ((Get-Content 'app/Modules/Finance/Frontend/finance-period-calculation.js' -Raw).Trim() -ne 'phase implementation') {
+        throw 'Restricted test-only correction changed production.'
+    }
 }
-if ($pipelineText -notmatch 'Test-only validation failure changed production files') {
-    throw 'Test-only corrections do not protect production files.'
-}
-if ($pipelineText.IndexOf('Invoke-PhaseValidationAttempt') -gt $pipelineText.LastIndexOf('Invoke-CodexReview')) {
-    throw 'Validation approval is not ordered before review.'
+finally {
+    Set-Location -LiteralPath $originalLocation
+    $resolvedTempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    $resolvedTestRoot = [System.IO.Path]::GetFullPath($testRoot)
+    if ($resolvedTestRoot.StartsWith($resolvedTempRoot, [System.StringComparison]::OrdinalIgnoreCase) -and (Test-Path $resolvedTestRoot)) {
+        Remove-Item -LiteralPath $resolvedTestRoot -Recurse -Force
+    }
 }
 
 Write-Host 'Validation fix-loop controlled tests: OK'

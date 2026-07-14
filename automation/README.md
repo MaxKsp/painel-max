@@ -71,6 +71,7 @@ Optional flags:
 - `-SkipArchitect`
 - `-UseCodexUserConfig`
 - `-MaxFixAttempts 2`
+- `-TestOnlyTolerance 1e-9`
 - `-ResumePhase automation\phases\phase-18.json`
 - `-ArchitectTimeoutSeconds 300`
 - `-ImplementerTimeoutSeconds 900`
@@ -104,25 +105,36 @@ and test validation still runs afterward for accepted changes.
 
 ## Automatic Validation Corrections
 
-`-MaxFixAttempts` defaults to 2. When deterministic validation fails, the
-pipeline saves only the structured `failed` entries, builds a short correction
-prompt containing the phase id, allowlist, denylist, current changed files, and
-stdout/stderr from failed commands, then calls Claude again with the same
-restricted `acceptEdits` permissions. Passed commands, the original prompt,
-project documentation, and full phase history are not resent.
+`-MaxFixAttempts` defaults to 2. Before calling Claude, the pipeline classifies
+each failure as `test-only`, `production-possible`, or `unknown`. Unknown
+failures stop for human review. Test-only failures restrict Claude to the exact
+test paths associated with failed commands; phase production files are not part
+of that correction allowlist. `-TestOnlyTolerance` controls deterministic
+IEEE-754 residual classification and defaults to `1e-9`.
 
-Every correction is scope-checked before the complete validation suite runs
-again. A scope violation, a correction that changes no file, or exhaustion of
-`MaxFixAttempts` stops immediately and preserves the working tree. Known Node
-`vm` cross-realm and residual IEEE-754 failures are classified as test-only;
-the pipeline rejects production changes made for those corrections.
-`MODULE_NOT_FOUND` guidance first checks phase/test naming and forbids duplicate
-artifacts.
+The correction prompt contains only the classification, exact correction
+allowlist, forbidden paths, failed commands with stdout/stderr, expected fix,
+and instructions to run the failed test and stop without committing. Passed
+commands, the original prompt, project documentation, and phase history are not
+resent.
+
+Before every correction, byte-exact copies and an existence manifest are saved
+under `fix-backup-attempt-N/`. The pipeline computes only the delta introduced
+by Claude. An unauthorized edit restores the pre-attempt bytes (not `HEAD`),
+removes newly created unauthorized files, records the violation, and consumes a
+retry without running validation. This preserves the already implemented phase
+diff. After an accepted correction, each failed command runs first; only when
+those targeted checks pass does the complete scope/test/lint suite run.
 
 Artifacts include `validation-attempt-N.json`,
 `validation-failures-attempt-N.json`, `fix-prompt-attempt-N.txt`, and separate
 `fix-implementer-attempt-N.stdout.log` / `.stderr.log` files. Reviewer runs only
 after validation passes.
+
+The Reviewer uses native `codex exec review --uncommitted`. Exec-global options
+(`--ignore-user-config`, `--ephemeral`, sandbox, working directory, output file,
+and schema) precede `review`; no trailing `-`, prompt, or stdin content is sent.
+Stdin is closed immediately and `review.json` must be created.
 
 Resume an already implemented phase with:
 
@@ -139,7 +151,13 @@ The controlled retry-policy checks run without a real phase or commit:
 
 ```powershell
 .\scripts\test-validation-fix-loop.ps1
+.\scripts\test-reviewer-runner.ps1
 ```
+
+`test-reviewer-runner.ps1` uses a deterministic mock by default to verify the
+exact CLI argument order, closed stdin, output schema, and read-only working
+tree. After `codex login`, use `-Live` to repeat the same temporary-repository
+check against the installed Codex CLI.
 
 The controlled write check can be run independently without running a phase:
 
