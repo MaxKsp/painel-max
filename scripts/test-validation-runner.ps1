@@ -67,7 +67,6 @@ try {
     'fixture' | Set-Content -LiteralPath 'fixture.txt' -Encoding utf8
 
     $successRun = Join-Path $testRoot 'success-run'
-    New-Item -ItemType Directory -Path $successRun -Force | Out-Null
     $successPhase = Join-Path $testRoot 'success.json'
     $stdoutCommand = 'powershell.exe -NoProfile -NonInteractive -Command "Write-Output validation-ok; [Console]::Error.WriteLine(''validation-stderr'')"'
     $stdinCommand = 'powershell.exe -NoProfile -NonInteractive -Command "$null = [Console]::In.ReadToEnd(); Write-Output stdin-closed"'
@@ -81,9 +80,19 @@ try {
     if ($successText -notmatch 'stdin-closed') {
         throw 'Validation command did not observe closed stdin.'
     }
+    if (-not (Test-Path -LiteralPath $successRun -PathType Container)) {
+        throw 'Validator did not create the missing run directory.'
+    }
+    $successLastCommandPath = Join-Path $successRun 'validation-last-command.txt'
+    if (-not (Test-Path -LiteralPath $successLastCommandPath -PathType Leaf)) {
+        throw 'Validator did not write validation-last-command.txt in the newly created run directory.'
+    }
+    $successLastCommand = Get-Content -LiteralPath $successLastCommandPath -Raw
+    if ($successLastCommand.Trim() -ne $stdinCommand) {
+        throw 'Last validation command was not recorded in the newly created run directory.'
+    }
 
     $timeoutRun = Join-Path $testRoot 'timeout-run'
-    New-Item -ItemType Directory -Path $timeoutRun -Force | Out-Null
     $timeoutPhase = Join-Path $testRoot 'timeout.json'
     $timeoutCommand = 'powershell.exe -NoProfile -NonInteractive -Command "Start-Sleep 30"'
     Write-TestPhase -Path $timeoutPhase -Commands @($timeoutCommand)

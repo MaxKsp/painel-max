@@ -204,6 +204,24 @@ function Assert-PhaseDefinition {
     }
 }
 
+function Ensure-ParentDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $absolutePath = [System.IO.Path]::GetFullPath($Path)
+    $parentDirectory = Split-Path -Parent $absolutePath
+    if ([string]::IsNullOrWhiteSpace($parentDirectory)) {
+        throw "Unable to resolve parent directory for output path: $Path"
+    }
+
+    New-Item -ItemType Directory -Path $parentDirectory -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $parentDirectory -PathType Container)) {
+        throw "Output directory was not created: $parentDirectory"
+    }
+}
+
 function Invoke-LoggedCommand {
     param(
         [Parameter(Mandatory = $true)]
@@ -220,7 +238,9 @@ function Invoke-LoggedCommand {
     Write-Host "[Validation] starting: $Command"
     $script:LastValidationCommand = $Command
     if ($OutputDirectory) {
-        $Command | Out-File -LiteralPath (Join-Path $OutputDirectory 'validation-last-command.txt') -Encoding utf8
+        $lastCommandPath = Join-Path $OutputDirectory 'validation-last-command.txt'
+        Ensure-ParentDirectory -Path $lastCommandPath
+        $Command | Out-File -LiteralPath $lastCommandPath -Encoding utf8
     }
 
     $cmdExe = Resolve-CmdExecutable
@@ -317,6 +337,7 @@ function Invoke-LoggedCommand {
     if ($OutputDirectory) {
         $logFileName = (($Label -replace '[^A-Za-z0-9\-_]+', '_').ToLower() + '.log')
         $logPath = Join-Path $OutputDirectory $logFileName
+        Ensure-ParentDirectory -Path $logPath
         $logText | Out-File -LiteralPath $logPath -Encoding utf8
     }
 
@@ -360,6 +381,14 @@ $repoRoot = Resolve-RepoRoot
 $powerShellExe = Get-PowerShellExecutable
 Set-Location -LiteralPath $repoRoot
 
+if ($RunDirectory) {
+    $RunDirectory = [System.IO.Path]::GetFullPath($RunDirectory)
+    New-Item -ItemType Directory -Path $RunDirectory -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $RunDirectory -PathType Container)) {
+        throw "Validation run directory was not created: $RunDirectory"
+    }
+}
+
 $phasePath = Join-Path $repoRoot $Phase
 $phaseObject = Get-PhaseObject -Path $phasePath
 Assert-PhaseDefinition -Definition $phaseObject
@@ -387,7 +416,9 @@ if (-not $SkipScope) {
     $scopeResult = Invoke-LoggedCommand -Command $scopeCommand -Label 'scope' -OutputDirectory $RunDirectory -TimeoutSeconds $ValidationCommandTimeoutSeconds
 
     if ($RunDirectory) {
-        $scopeResult.stdout | Out-File -LiteralPath (Join-Path $RunDirectory 'scope.json') -Encoding utf8
+        $scopePath = Join-Path $RunDirectory 'scope.json'
+        Ensure-ParentDirectory -Path $scopePath
+        $scopeResult.stdout | Out-File -LiteralPath $scopePath -Encoding utf8
     }
 
     if (-not $scopeResult.passed) {
