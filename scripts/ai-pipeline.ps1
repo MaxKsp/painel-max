@@ -21,6 +21,10 @@ param(
 
     [string]$ClaudePermissionMode = 'acceptEdits',
 
+    [int]$PostProcessTimeoutSeconds = 30,
+
+    [int]$ValidationTimeoutSeconds = 900,
+
     [int]$ReviewerTimeoutSeconds = 300,
 
     [int]$HeartbeatSeconds = 10,
@@ -408,6 +412,7 @@ function Invoke-NativeProcess {
 
     $lastHeartbeat = Get-Date
     $timedOut = $false
+    $asyncReadsStopped = $false
 
     try {
         while (-not $process.HasExited) {
@@ -427,7 +432,60 @@ function Invoke-NativeProcess {
             Start-Sleep -Milliseconds 250
         }
 
-        $null = $process.WaitForExit(5000)
+        $postProcessStartedAt = Get-Date
+        $postProcessDeadline = $postProcessStartedAt.AddSeconds($PostProcessTimeoutSeconds)
+        $processExited = $process.WaitForExit(5000)
+
+        if (-not $processExited) {
+            Stop-ProcessTree -ProcessId $process.Id
+            throw "Post-process transition timed out waiting for $StageName to exit."
+        }
+
+        $previousStdoutLength = -1
+        $previousStderrLength = -1
+        $stableReadCount = 0
+
+        while ((Get-Date) -lt $postProcessDeadline -and $stableReadCount -lt 2) {
+            Start-Sleep -Milliseconds 100
+            $currentStdoutLength = $stdoutBuilder.Length
+            $currentStderrLength = $stderrBuilder.Length
+
+            if ($currentStdoutLength -eq $previousStdoutLength -and $currentStderrLength -eq $previousStderrLength) {
+                $stableReadCount++
+            } else {
+                $stableReadCount = 0
+                $previousStdoutLength = $currentStdoutLength
+                $previousStderrLength = $currentStderrLength
+            }
+        }
+
+        try {
+            $process.CancelOutputRead()
+        } catch [System.InvalidOperationException] {
+        }
+        try {
+            $process.CancelErrorRead()
+        } catch [System.InvalidOperationException] {
+        }
+        $asyncReadsStopped = $true
+
+        if ($stdoutRegistration) {
+            Unregister-Event -SourceIdentifier $stdoutRegistration.Name -ErrorAction SilentlyContinue
+            Stop-Job -Id $stdoutRegistration.Id -ErrorAction SilentlyContinue
+            Remove-Job -Id $stdoutRegistration.Id -Force -ErrorAction SilentlyContinue
+            $stdoutRegistration = $null
+        }
+        if ($stderrRegistration) {
+            Unregister-Event -SourceIdentifier $stderrRegistration.Name -ErrorAction SilentlyContinue
+            Stop-Job -Id $stderrRegistration.Id -ErrorAction SilentlyContinue
+            Remove-Job -Id $stderrRegistration.Id -Force -ErrorAction SilentlyContinue
+            $stderrRegistration = $null
+        }
+
+        if ((Get-Date) -ge $postProcessDeadline) {
+            throw "Post-process transition timed out while draining output for $StageName."
+        }
+
         $duration = (Get-Date) - $startTime
         $exitCode = -1
 
@@ -493,12 +551,24 @@ function Invoke-NativeProcess {
         }
     }
     finally {
+        if ($process -and -not $asyncReadsStopped) {
+            try {
+                $process.CancelOutputRead()
+            } catch [System.InvalidOperationException] {
+            }
+            try {
+                $process.CancelErrorRead()
+            } catch [System.InvalidOperationException] {
+            }
+        }
         if ($stdoutRegistration) {
             Unregister-Event -SourceIdentifier $stdoutRegistration.Name -ErrorAction SilentlyContinue
+            Stop-Job -Id $stdoutRegistration.Id -ErrorAction SilentlyContinue
             Remove-Job -Id $stdoutRegistration.Id -Force -ErrorAction SilentlyContinue
         }
         if ($stderrRegistration) {
             Unregister-Event -SourceIdentifier $stderrRegistration.Name -ErrorAction SilentlyContinue
+            Stop-Job -Id $stderrRegistration.Id -ErrorAction SilentlyContinue
             Remove-Job -Id $stderrRegistration.Id -Force -ErrorAction SilentlyContinue
         }
         if ($process -and -not $process.HasExited) {
@@ -866,10 +936,19 @@ try {
     if ($VerboseLogs) {
         $validationArgs += '-VerboseLogs'
     }
-    $validationJson = & $powerShellExe @validationArgs
-    if ($LASTEXITCODE -ne 0) {
+    Write-Host 'Implementer finished, starting validation'
+    try {
+        $validationResult = Invoke-NativeProcess `
+            -StageName 'Validation' `
+            -FilePath $powerShellExe `
+            -ArgumentList $validationArgs `
+            -RunDirectory $runDirectory `
+            -TimeoutSeconds $ValidationTimeoutSeconds `
+            -HeartbeatIntervalSeconds $HeartbeatSeconds
+        $validationJson = $validationResult.stdout
+    } catch {
         $failures.Add('Deterministic validation failed after implementation.')
-        throw 'Validation failed.'
+        throw
     }
 
     $reviewJson = Invoke-CodexReview -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -SchemaPath $reviewSchemaPath
