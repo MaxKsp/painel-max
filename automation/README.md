@@ -44,6 +44,13 @@ Optional flags:
 - `-MaxFixAttempts 2`
 - `-VerboseLogs`
 
+Current `-DryRun` behavior:
+
+- runs preflight and Codex planning only
+- writes run artifacts for the planning step
+- does not call Claude
+- does not run validation, review, commit, or push
+
 ## What Each Script Does
 
 - `scripts/ai-pipeline.ps1`
@@ -61,8 +68,8 @@ Optional flags:
 ## Required CLIs
 
 - `git`
-- `codex`
-- `claude`
+- `%APPDATA%\npm\codex.cmd`
+- `%APPDATA%\npm\claude.cmd`
 - `node`
 - `php`
 

@@ -31,6 +31,14 @@ function Get-PowerShellExecutable {
     return (Get-Process -Id $PID).Path
 }
 
+function Resolve-CmdExecutable {
+    $cmdPath = Join-Path $env:SystemRoot 'System32\cmd.exe'
+    if (-not (Test-Path -LiteralPath $cmdPath)) {
+        throw "cmd.exe not found: $cmdPath"
+    }
+    return $cmdPath
+}
+
 function Resolve-AgentCommandPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -46,6 +54,96 @@ function Resolve-AgentCommandPath {
     }
 
     return $cmdPath
+}
+
+function ConvertTo-WindowsCommandLineArgument {
+    param(
+        [AllowNull()]
+        [string]$Argument
+    )
+
+    if ($null -eq $Argument -or $Argument.Length -eq 0) {
+        return '""'
+    }
+
+    if ($Argument -notmatch '[\s"]') {
+        return $Argument
+    }
+
+    $builder = New-Object System.Text.StringBuilder
+    $null = $builder.Append('"')
+    $backslashCount = 0
+
+    foreach ($character in $Argument.ToCharArray()) {
+        if ($character -eq '\') {
+            $backslashCount++
+            continue
+        }
+
+        if ($character -eq '"') {
+            $null = $builder.Append('\' * (($backslashCount * 2) + 1))
+            $null = $builder.Append('"')
+            $backslashCount = 0
+            continue
+        }
+
+        if ($backslashCount -gt 0) {
+            $null = $builder.Append('\' * $backslashCount)
+            $backslashCount = 0
+        }
+
+        $null = $builder.Append($character)
+    }
+
+    if ($backslashCount -gt 0) {
+        $null = $builder.Append('\' * ($backslashCount * 2))
+    }
+
+    $null = $builder.Append('"')
+    return $builder.ToString()
+}
+
+function Join-WindowsCommandLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [string[]]$ArgumentList = @()
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add((ConvertTo-WindowsCommandLineArgument -Argument $FilePath))
+    foreach ($argument in @($ArgumentList)) {
+        $parts.Add((ConvertTo-WindowsCommandLineArgument -Argument $argument))
+    }
+    return ($parts -join ' ')
+}
+
+function Get-CommandExecutableToken {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CommandText
+    )
+
+    if ($CommandText -match '^\s*"([^"]+)"') {
+        return $matches[1]
+    }
+
+    if ($CommandText -match '^\s*([^\s]+)') {
+        return $matches[1]
+    }
+
+    throw "Unable to parse executable from command text: $CommandText"
+}
+
+function Get-LogTextOrEmpty {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return ''
+    }
+
+    return $Text.TrimEnd()
 }
 
 function Get-PhaseObject {
@@ -114,7 +212,7 @@ function Assert-CleanPreconditions {
 
     $phaseObject = Get-PhaseObject -Path $ResolvedPhasePath
     foreach ($phpCommand in @($phaseObject.phpTests) + @($phaseObject.phpLint)) {
-        $exe = ($phpCommand -split '\s+')[0]
+        $exe = Get-CommandExecutableToken -CommandText $phpCommand
         if ($exe -match '^[A-Za-z]:\\') {
             if (-not (Test-Path -LiteralPath $exe)) {
                 throw "Referenced PHP executable not found: $exe"
@@ -167,62 +265,74 @@ function Invoke-NativeAndCapture {
 
         [Parameter(Mandatory = $true)]
         [string]$OutputPath
+        ,
+        [string]$StandardInputText
     )
 
-    $argumentDisplay = if ($ArgumentList.Count -gt 0) {
-        ($ArgumentList | ForEach-Object {
-            if ($_ -match '\s') { '"' + $_.Replace('"', '\"') + '"' } else { $_ }
-        }) -join ' '
-    } else {
-        ''
-    }
+    $commandLine = Join-WindowsCommandLine -FilePath $FilePath -ArgumentList $ArgumentList
+    $cmdExe = Resolve-CmdExecutable
+    $invocationArgs = "/d /s /c `"$commandLine`""
 
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $FilePath
-    $startInfo.Arguments = $argumentDisplay
+    $startInfo.FileName = $cmdExe
+    $startInfo.Arguments = $invocationArgs
     $startInfo.WorkingDirectory = (Get-Location).Path
     $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.CreateNoWindow = $true
 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo
+    $startTime = Get-Date
     $null = $process.Start()
+    if ($PSBoundParameters.ContainsKey('StandardInputText')) {
+        $process.StandardInput.Write($StandardInputText)
+    }
+    $process.StandardInput.Close()
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $duration = (Get-Date) - $startTime
     $exitCode = $process.ExitCode
 
-    $combined = @()
-    if ($stdout) {
-        $combined += ($stdout -split "`r?`n")
-    }
-    if ($stderr) {
-        $combined += ($stderr -split "`r?`n")
-    }
-    $combined = @($combined | Where-Object { $_ -ne '' })
-    $combined | Out-File -LiteralPath $OutputPath -Encoding utf8
+    $logLines = @(
+        "Command: $FilePath",
+        "Arguments: $($ArgumentList -join ' | ')",
+        "WorkingDirectory: $((Get-Location).Path)",
+        "ExitCode: $exitCode",
+        "DurationMs: $([int][Math]::Round($duration.TotalMilliseconds))",
+        '',
+        '--- STDOUT ---',
+        (Get-LogTextOrEmpty -Text $stdout),
+        '',
+        '--- STDERR ---',
+        (Get-LogTextOrEmpty -Text $stderr)
+    )
+    $logLines -join [Environment]::NewLine | Out-File -LiteralPath $OutputPath -Encoding utf8
 
     if ($exitCode -ne 0) {
         $message = @(
             'Native command failed.',
             "Command: $FilePath",
-            "Arguments: $argumentDisplay",
+            "Arguments: $($ArgumentList -join ' | ')",
             "ExitCode: $exitCode",
+            "DurationMs: $([int][Math]::Round($duration.TotalMilliseconds))",
             'stderr:',
-            ($stderr.TrimEnd())
+            (Get-LogTextOrEmpty -Text $stderr)
         ) -join [Environment]::NewLine
         throw $message
     }
 
     return [pscustomobject]@{
-        output   = @($combined)
+        output   = @((if ($stdout) { $stdout -split "`r?`n" } else { @() }))
         stdout   = $stdout
         stderr   = $stderr
         exitCode = $exitCode
         command  = $FilePath
         arguments = @($ArgumentList)
+        duration = $duration
     }
 }
 
@@ -256,12 +366,17 @@ function Invoke-CodexPlan {
     $result = Invoke-NativeAndCapture -FilePath $codexCmd -ArgumentList @(
         'exec',
         '--sandbox', 'read-only',
+        '--cd', $RepoRoot,
         '--output-last-message', $planOutputPath,
         '--output-schema', $SchemaPath,
-        $prompt
-    ) -OutputPath (Join-Path $RunDirectory 'plan.stdout.log')
+        '-'
+    ) -OutputPath (Join-Path $RunDirectory 'plan.stdout.log') -StandardInputText $prompt
 
-    $planText = ($result.output -join [Environment]::NewLine).Trim()
+    if (-not (Test-Path -LiteralPath $planOutputPath)) {
+        throw "Codex planning did not create output file: $planOutputPath"
+    }
+
+    $planText = (Get-Content -LiteralPath $planOutputPath -Raw).Trim()
     $planText | Out-File -LiteralPath (Join-Path $RunDirectory 'plan.txt') -Encoding utf8
     return $planText
 }
@@ -280,11 +395,10 @@ function Invoke-ClaudeImplementation {
 
     $claudeCmd = Resolve-AgentCommandPath -Name 'claude'
     $result = Invoke-NativeAndCapture -FilePath $claudeCmd -ArgumentList @(
-        '-p',
-        $prompt
-    ) -OutputPath (Join-Path $RunDirectory 'implementer.stdout.log')
+        '-p'
+    ) -OutputPath (Join-Path $RunDirectory 'implementer.stdout.log') -StandardInputText $prompt
 
-    ($result.output -join [Environment]::NewLine) | Out-File -LiteralPath (Join-Path $RunDirectory 'implementer.txt') -Encoding utf8
+    (Get-LogTextOrEmpty -Text $result.stdout) | Out-File -LiteralPath (Join-Path $RunDirectory 'implementer.txt') -Encoding utf8
 }
 
 function Invoke-CodexReview {
@@ -305,12 +419,19 @@ function Invoke-CodexReview {
     $result = Invoke-NativeAndCapture -FilePath $codexCmd -ArgumentList @(
         'exec',
         '--sandbox', 'read-only',
+        '--cd', $RepoRoot,
+        'review',
+        '--uncommitted',
         '--output-last-message', $reviewOutputPath,
         '--output-schema', $SchemaPath,
-        $prompt
-    ) -OutputPath (Join-Path $RunDirectory 'review.stdout.log')
+        '-'
+    ) -OutputPath (Join-Path $RunDirectory 'review.stdout.log') -StandardInputText $prompt
 
-    $reviewText = ($result.output -join [Environment]::NewLine).Trim()
+    if (-not (Test-Path -LiteralPath $reviewOutputPath)) {
+        throw "Codex review did not create output file: $reviewOutputPath"
+    }
+
+    $reviewText = (Get-Content -LiteralPath $reviewOutputPath -Raw).Trim()
     $reviewText | Out-File -LiteralPath (Join-Path $RunDirectory 'review.txt') -Encoding utf8
     return $reviewText
 }
@@ -345,9 +466,8 @@ $($Blockers -join [Environment]::NewLine)
 
     $claudeCmd = Resolve-AgentCommandPath -Name 'claude'
     $result = Invoke-NativeAndCapture -FilePath $claudeCmd -ArgumentList @(
-        '-p',
-        $prompt
-    ) -OutputPath (Join-Path $RunDirectory "fix-$AttemptNumber.stdout.log")
+        '-p'
+    ) -OutputPath (Join-Path $RunDirectory "fix-$AttemptNumber.stdout.log") -StandardInputText $prompt
 }
 
 function Write-Summary {
@@ -368,6 +488,7 @@ function Write-Summary {
         "- Commit: $($Data.CommitMessage)",
         "- SHA: $($Data.CommitSha)",
         "- Push: $($Data.PushStatus)",
+        "- DryRun: $($Data.DryRun)",
         "",
         "## Files Modified",
         ""
@@ -414,190 +535,177 @@ $failures = New-Object System.Collections.Generic.List[string]
 $attempts = 0
 $commitSha = ''
 $pushStatus = 'not-requested'
+$reviewApproved = $false
+$planApproved = $false
+$changedFiles = @()
 
 if ($VerboseLogs) {
     Write-Host "Run directory: $runDirectory"
 }
 
-$planJson = $null
-if ($SkipArchitect) {
-    $skipPath = Join-Path $runDirectory 'plan.json'
-    if (-not (Test-Path -LiteralPath $skipPath)) {
-        $skipPath = Find-LatestPlanPath -RepoRoot $repoRoot
+try {
+    $planJson = $null
+    if ($SkipArchitect) {
+        $skipPath = Join-Path $runDirectory 'plan.json'
+        if (-not (Test-Path -LiteralPath $skipPath)) {
+            $skipPath = Find-LatestPlanPath -RepoRoot $repoRoot
+        }
+        if (-not $skipPath) {
+            throw 'SkipArchitect requires an existing approved plan.json in automation/runs/.'
+        }
+        $planJson = Get-Content -LiteralPath $skipPath -Raw
+    } else {
+        $planJson = Invoke-CodexPlan -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -SchemaPath $planSchemaPath
     }
-    if (-not $skipPath) {
-        throw 'SkipArchitect requires an existing approved plan.json in automation/runs/.'
+
+    $planObject = $planJson | ConvertFrom-Json
+    $planApproved = [bool]$planObject.approved
+    if (-not $planObject.approved) {
+        $failures.Add('Codex did not approve the phase plan.')
+        throw 'Plan not approved.'
     }
-    $planJson = Get-Content -LiteralPath $skipPath -Raw
-} else {
-    $planJson = Invoke-CodexPlan -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -SchemaPath $planSchemaPath
-}
 
-$planObject = $planJson | ConvertFrom-Json
-if (-not $planObject.approved) {
-    $failures.Add('Codex did not approve the phase plan.')
-    Write-Summary -Path (Join-Path $runDirectory 'summary.md') -Data @{
-        Phase        = $phaseObject.id
-        Branch       = $branch
-        PlanApproved = $false
-        ReviewApproved = $false
-        Attempts     = 0
-        Duration     = ((Get-Date) - $startTime).ToString()
-        CommitMessage = ''
-        CommitSha    = ''
-        PushStatus   = $pushStatus
-        Files        = @()
-        Failures     = @($failures)
-    }
-    throw 'Plan not approved.'
-}
-
-if (-not $DryRun) {
-    Invoke-ClaudeImplementation -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson
-}
-
-$validationArgs = @(
-    '-NoProfile',
-    '-File', (Join-Path $repoRoot 'scripts/validate-phase.ps1'),
-    '-Phase', $Phase,
-    '-RunDirectory', $runDirectory
-)
-if ($VerboseLogs) {
-    $validationArgs += '-VerboseLogs'
-}
-$validationJson = & $powerShellExe @validationArgs
-if ($LASTEXITCODE -ne 0) {
-    $failures.Add('Deterministic validation failed after implementation.')
-    throw 'Validation failed.'
-}
-
-$reviewJson = Invoke-CodexReview -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -SchemaPath $reviewSchemaPath
-$reviewObject = $reviewJson | ConvertFrom-Json
-
-while ((-not $reviewObject.approved -or @($reviewObject.blockers).Count -gt 0) -and $attempts -lt $MaxFixAttempts) {
-    $attempts++
     if ($DryRun) {
-        break
+        Write-Host 'DryRun completed after planning. No implementation, validation, review, commit, or push performed.'
+        return
     }
 
-    Invoke-FixAttempt -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -Blockers @($reviewObject.blockers) -AttemptNumber $attempts
+    Invoke-ClaudeImplementation -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson
 
+    $validationArgs = @(
+        '-NoProfile',
+        '-File', (Join-Path $repoRoot 'scripts/validate-phase.ps1'),
+        '-Phase', $Phase,
+        '-RunDirectory', $runDirectory
+    )
+    if ($VerboseLogs) {
+        $validationArgs += '-VerboseLogs'
+    }
     $validationJson = & $powerShellExe @validationArgs
     if ($LASTEXITCODE -ne 0) {
-        $failures.Add("Validation failed after fix attempt $attempts.")
-        throw 'Validation failed after fix attempt.'
+        $failures.Add('Deterministic validation failed after implementation.')
+        throw 'Validation failed.'
     }
 
     $reviewJson = Invoke-CodexReview -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -SchemaPath $reviewSchemaPath
     $reviewObject = $reviewJson | ConvertFrom-Json
-}
 
-if (-not $reviewObject.approved -or @($reviewObject.blockers).Count -gt 0) {
-    $failures.Add('Review still has blockers after allowed attempts.')
-    throw 'Review rejected.'
-}
+    while ((-not $reviewObject.approved -or @($reviewObject.blockers).Count -gt 0) -and $attempts -lt $MaxFixAttempts) {
+        $attempts++
 
-$changedFiles = Get-ChangedFiles
-if ($changedFiles.Count -eq 0) {
-    $failures.Add('Implementation produced no changes.')
-    throw 'No changes detected.'
-}
+        Invoke-FixAttempt -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -Blockers @($reviewObject.blockers) -AttemptNumber $attempts
 
-if ($DryRun) {
-    Write-Summary -Path (Join-Path $runDirectory 'summary.md') -Data @{
-        Phase         = $phaseObject.id
-        Branch        = $branch
-        PlanApproved  = $true
-        ReviewApproved = $true
-        Attempts      = $attempts
-        Duration      = ((Get-Date) - $startTime).ToString()
-        CommitMessage = ''
-        CommitSha     = ''
-        PushStatus    = 'dry-run'
-        Files         = @($changedFiles)
-        Failures      = @($failures)
+        $validationJson = & $powerShellExe @validationArgs
+        if ($LASTEXITCODE -ne 0) {
+            $failures.Add("Validation failed after fix attempt $attempts.")
+            throw 'Validation failed after fix attempt.'
+        }
+
+        $reviewJson = Invoke-CodexReview -RepoRoot $repoRoot -RunDirectory $runDirectory -PhaseJson $phaseJson -PlanJson $planJson -SchemaPath $reviewSchemaPath
+        $reviewObject = $reviewJson | ConvertFrom-Json
     }
-    Write-Host 'DryRun completed. No commit performed.'
-    exit 0
-}
 
-foreach ($file in $changedFiles) {
-    & git add -- $file
+    $reviewApproved = [bool]($reviewObject.approved -and @($reviewObject.blockers).Count -eq 0)
+    if (-not $reviewApproved) {
+        $failures.Add('Review still has blockers after allowed attempts.')
+        throw 'Review rejected.'
+    }
+
+    $changedFiles = Get-ChangedFiles
+    if ($changedFiles.Count -eq 0) {
+        $failures.Add('Implementation produced no changes.')
+        throw 'No changes detected.'
+    }
+
+    foreach ($file in $changedFiles) {
+        & git add -- $file
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to stage file: $file"
+        }
+    }
+
+    $cachedStat = @(& git diff --cached --stat)
+    $cachedStat | Out-File -LiteralPath (Join-Path $runDirectory 'cached-diff-stat.txt') -Encoding utf8
+    $cachedStat | ForEach-Object { Write-Host $_ }
+
+    Write-Host ''
+    Write-Host 'Files staged for commit:'
+    $changedFiles | ForEach-Object { Write-Host " - $_" }
+    Write-Host ''
+    Write-Host "Commit message: $($phaseObject.commitMessage)"
+
+    $shouldCommit = $AutoCommit
+    if (-not $AutoCommit) {
+        $answer = Read-Host 'Create commit now? [y/N]'
+        $shouldCommit = $answer -match '^(y|yes)$'
+    }
+
+    if (-not $shouldCommit) {
+        $failures.Add('Commit cancelled by human confirmation step.')
+        throw 'Commit not confirmed.'
+    }
+
+    & git commit -m $phaseObject.commitMessage
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to stage file: $file"
-    }
-}
-
-$cachedStat = @(& git diff --cached --stat)
-$cachedStat | Out-File -LiteralPath (Join-Path $runDirectory 'cached-diff-stat.txt') -Encoding utf8
-$cachedStat | ForEach-Object { Write-Host $_ }
-
-Write-Host ''
-Write-Host 'Files staged for commit:'
-$changedFiles | ForEach-Object { Write-Host " - $_" }
-Write-Host ''
-Write-Host "Commit message: $($phaseObject.commitMessage)"
-
-$shouldCommit = $AutoCommit
-if (-not $AutoCommit) {
-    $answer = Read-Host 'Create commit now? [y/N]'
-    $shouldCommit = $answer -match '^(y|yes)$'
-}
-
-if (-not $shouldCommit) {
-    $failures.Add('Commit cancelled by human confirmation step.')
-    throw 'Commit not confirmed.'
-}
-
-& git commit -m $phaseObject.commitMessage
-if ($LASTEXITCODE -ne 0) {
-    throw 'git commit failed.'
-}
-
-$commitSha = (& git rev-parse HEAD).Trim()
-
-$postValidationJson = & $powerShellExe @validationArgs
-if ($LASTEXITCODE -ne 0) {
-    $failures.Add('Post-commit validation failed.')
-    throw 'Post-commit validation failed.'
-}
-
-$postStatus = @(& git status --porcelain)
-if ($postStatus.Count -gt 0) {
-    $failures.Add('Working tree is not clean after commit.')
-    throw 'Working tree is not clean after commit.'
-}
-
-if ($Push) {
-    $upstream = (& git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
-    if (-not $upstream) {
-        $failures.Add('Push requested but branch has no upstream.')
-        throw 'No upstream configured.'
+        throw 'git commit failed.'
     }
 
-    & git push
+    $commitSha = (& git rev-parse HEAD).Trim()
+
+    $postValidationArgs = @($validationArgs + '-SkipScope')
+    $postValidationJson = & $powerShellExe @postValidationArgs
     if ($LASTEXITCODE -ne 0) {
-        $failures.Add('git push failed.')
-        throw 'git push failed.'
+        $failures.Add('Post-commit validation failed.')
+        throw 'Post-commit validation failed.'
     }
 
-    $pushStatus = 'pushed'
-} else {
-    $pushStatus = 'not-requested'
-}
+    $postStatus = @(& git status --porcelain)
+    if ($postStatus.Count -gt 0) {
+        $failures.Add('Working tree is not clean after commit.')
+        throw 'Working tree is not clean after commit.'
+    }
 
-Write-Summary -Path (Join-Path $runDirectory 'summary.md') -Data @{
-    Phase         = $phaseObject.id
-    Branch        = $branch
-    PlanApproved  = $true
-    ReviewApproved = $true
-    Attempts      = $attempts
-    Duration      = ((Get-Date) - $startTime).ToString()
-    CommitMessage = $phaseObject.commitMessage
-    CommitSha     = $commitSha
-    PushStatus    = $pushStatus
-    Files         = @($changedFiles)
-    Failures      = @($failures)
-}
+    if ($Push) {
+        $upstream = (& git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
+        if (-not $upstream) {
+            $failures.Add('Push requested but branch has no upstream.')
+            throw 'No upstream configured.'
+        }
 
-Write-Host "Pipeline completed successfully. Commit: $commitSha"
+        & git push
+        if ($LASTEXITCODE -ne 0) {
+            $failures.Add('git push failed.')
+            throw 'git push failed.'
+        }
+
+        $pushStatus = 'pushed'
+    } else {
+        $pushStatus = 'not-requested'
+    }
+
+    Write-Host "Pipeline completed successfully. Commit: $commitSha"
+}
+catch {
+    if ($failures.Count -eq 0) {
+        $failures.Add($_.Exception.Message)
+    }
+    throw
+}
+finally {
+    if ($runDirectory) {
+        Write-Summary -Path (Join-Path $runDirectory 'summary.md') -Data @{
+            Phase          = $phaseObject.id
+            Branch         = $branch
+            PlanApproved   = $planApproved
+            ReviewApproved = $reviewApproved
+            Attempts       = $attempts
+            Duration       = ((Get-Date) - $startTime).ToString()
+            CommitMessage  = $phaseObject.commitMessage
+            CommitSha      = $commitSha
+            PushStatus     = $pushStatus
+            DryRun         = [bool]$DryRun
+            Files          = @($changedFiles)
+            Failures       = @($failures)
+        }
+    }
+}

@@ -25,6 +25,24 @@ function Get-PowerShellExecutable {
     return (Get-Process -Id $PID).Path
 }
 
+function Resolve-CmdExecutable {
+    $cmdPath = Join-Path $env:SystemRoot 'System32\cmd.exe'
+    if (-not (Test-Path -LiteralPath $cmdPath)) {
+        throw "cmd.exe not found: $cmdPath"
+    }
+    return $cmdPath
+}
+
+function Get-LogTextOrEmpty {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return ''
+    }
+
+    return $Text.TrimEnd()
+}
+
 function Get-PhaseObject {
     param([string]$Path)
 
@@ -77,23 +95,59 @@ function Invoke-LoggedCommand {
     )
 
     Write-Host "==> $Label"
-    $lines = & powershell -NoProfile -Command $Command 2>&1
-    $exitCode = $LASTEXITCODE
+    $cmdExe = Resolve-CmdExecutable
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $cmdExe
+    $startInfo.Arguments = "/d /s /c `"$Command`""
+    $startInfo.WorkingDirectory = (Get-Location).Path
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $startedAt = Get-Date
+    $null = $process.Start()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    $duration = (Get-Date) - $startedAt
+
+    $logText = @(
+        "Command: $Command",
+        "WorkingDirectory: $((Get-Location).Path)",
+        "ExitCode: $exitCode",
+        "DurationMs: $([int][Math]::Round($duration.TotalMilliseconds))",
+        '',
+        '--- STDOUT ---',
+        (Get-LogTextOrEmpty -Text $stdout),
+        '',
+        '--- STDERR ---',
+        (Get-LogTextOrEmpty -Text $stderr)
+    ) -join [Environment]::NewLine
 
     if ($OutputDirectory) {
         $logPath = Join-Path $OutputDirectory ($Label -replace '[^A-Za-z0-9\-_]+', '_').ToLower() + '.log'
-        $lines | Out-File -LiteralPath $logPath -Encoding utf8
+        $logText | Out-File -LiteralPath $logPath -Encoding utf8
     }
 
     if ($VerboseLogs) {
-        $lines | ForEach-Object { Write-Host $_ }
+        if ($stdout) {
+            (Get-LogTextOrEmpty -Text $stdout).Split([Environment]::NewLine) | ForEach-Object { Write-Host $_ }
+        }
+        if ($stderr) {
+            (Get-LogTextOrEmpty -Text $stderr).Split([Environment]::NewLine) | ForEach-Object { Write-Host $_ }
+        }
     }
 
     [pscustomobject]@{
-        label    = $Label
-        command  = $Command
-        exitCode = $exitCode
-        passed   = ($exitCode -eq 0)
+        label      = $Label
+        command    = $Command
+        exitCode   = $exitCode
+        durationMs = [int][Math]::Round($duration.TotalMilliseconds)
+        passed     = ($exitCode -eq 0)
     }
 }
 
