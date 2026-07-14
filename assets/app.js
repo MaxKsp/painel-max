@@ -2040,14 +2040,6 @@ function parcelaLabel(exp, now){
   n = Math.max(1, Math.min(exp.parcelas, n));
   return 'parcela ' + n + '/' + exp.parcelas;
 }
-function expenseTimeOf(exp){
-  if (exp.time) return exp.time;
-  if (exp.createdAt) { const d = new Date(exp.createdAt); return pad(d.getHours())+':'+pad(d.getMinutes()); }
-  return '12:00';
-}
-function expenseHourOf(exp){
-  return Number(expenseTimeOf(exp).split(':')[0]);
-}
 const CATEGORIA_LABEL = { moradia:'Moradia', transporte:'Transporte', alimentacao:'Alimentação', lazer:'Lazer', saude:'Saúde', educacao:'Educação', assinaturas:'Assinaturas', financiamento:'Financiamento', outros:'Outros' };
 
 /* categorias = presets fixos + as que o usuário cria (kv custom_categories) */

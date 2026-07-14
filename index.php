@@ -804,6 +804,7 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
 <script src="assets/finance-period-calculation.js?v=<?= @filemtime(__DIR__.'/assets/finance-period-calculation.js') ?>"></script>
 <script src="assets/finance-expense-aggregation-calculation.js?v=<?= @filemtime(__DIR__.'/assets/finance-expense-aggregation-calculation.js') ?>"></script>
 <script src="assets/finance-income-activation-calculation.js?v=<?= @filemtime(__DIR__.'/assets/finance-income-activation-calculation.js') ?>"></script>
+<script src="assets/finance-expense-time-calculation.js?v=<?= @filemtime(__DIR__.'/assets/finance-expense-time-calculation.js') ?>"></script>
 <script src="assets/app.js?v=<?= @filemtime(__DIR__.'/assets/app.js') ?>"></script>
 </body>
 </html>
