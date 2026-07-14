@@ -1895,30 +1895,9 @@ document.getElementById('trSave').onclick = async ()=>{
   const toId = document.getElementById('trTo').value;
   const value = Number(document.getElementById('trValue').value||0);
   const date = document.getElementById('trDate').value || dkey(new Date());
-  if (!fromId || !toId || fromId===toId){ toast('Escolha contas diferentes.', {error:true}); return; }
-  if (value<=0){ toast('Valor inválido.', {error:true}); return; }
-  const accounts = await getAccounts();
-  const from = accounts.find(a=>a.id===fromId), to = accounts.find(a=>a.id===toId);
-  if (!from || !to) return;
-  const toCard = to.tipo==='cartao';
-  from.saldo = Number(from.saldo||0) - value;
-  if (toCard) to.fatura = Math.max(0, Number(to.fatura||0) - value);
-  else to.saldo = Number(to.saldo||0) + value;
-  const tr = { id: genId(), fromId, toId, value, date, kind: toCard?'payment':'transfer', createdAt: Date.now() };
-  const transfers = await getTransfers(); transfers.push(tr);
-  await storeSet('accounts_v2', accounts);
-  await storeSet('transfers', transfers);
-  document.getElementById('transferModalOverlay').classList.remove('open');
-  renderFinance();
-  toast(toCard?'Fatura paga por transferência':'Transferência feita', { undo: async ()=>{
-    const accs = await getAccounts();
-    const f = accs.find(a=>a.id===fromId), t = accs.find(a=>a.id===toId);
-    if (f) f.saldo = Number(f.saldo||0) + value;
-    if (t){ if (toCard) t.fatura = Number(t.fatura||0) + value; else t.saldo = Number(t.saldo||0) - value; }
-    let trs = await getTransfers(); trs = trs.filter(x=>x.id!==tr.id);
-    await storeSet('accounts_v2', accs); await storeSet('transfers', trs);
-    renderFinance();
-  }});
+  // logica de transferBetweenAccounts() agora vive em assets/account-transfer.js,
+  // carregado antes deste arquivo em index.php.
+  await transferBetweenAccounts(fromId, toId, value, date);
 };
 async function accountAction(act, id){
   let accounts = await getAccounts();
