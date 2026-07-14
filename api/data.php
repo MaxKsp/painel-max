@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../finance.php';
+require_once __DIR__ . '/../app/Modules/Finance/FinanceDataBootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');
 $uid = require_login();
@@ -16,7 +17,7 @@ if ($method === 'GET') {
     session_write_close();
     if (isset($_GET['all'])) {
         // migra kv->tabelas uma vez, entao serve financeiro das tabelas
-        try { finance_migrate_if_needed($db, $uid); } catch (Throwable $e) { error_log('migrate: '.$e->getMessage()); }
+        $financeData = finance_data_bootstrap($db, $uid);
         $stmt = $db->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%'");
         $stmt->execute([$uid]);
         $out = [];
@@ -24,8 +25,8 @@ if ($method === 'GET') {
             $out[$row['data_key']] = json_decode($row['data_value']);
         }
         // fonte de verdade do financeiro = tabelas (sobrescreve o kv antigo)
-        foreach (FINANCE_SETS as $kvKey => $set) {
-            $out[$kvKey] = finance_load_set($db, $uid, $set);
+        foreach ($financeData as $kvKey => $value) {
+            $out[$kvKey] = $value;
         }
         echo json_encode($out);
         exit;
