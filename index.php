@@ -798,6 +798,7 @@ try{ const p = JSON.parse(localStorage.getItem('pm_prefs')||'{}');
 <script src="assets/account-transfer.js?v=<?= @filemtime(__DIR__.'/assets/account-transfer.js') ?>"></script>
 <script src="assets/ofx-import-confirmation.js?v=<?= @filemtime(__DIR__.'/assets/ofx-import-confirmation.js') ?>"></script>
 <script src="assets/finance-anomaly-detection.js?v=<?= @filemtime(__DIR__.'/assets/finance-anomaly-detection.js') ?>"></script>
+<script src="assets/finance-income-regime-calculation.js?v=<?= @filemtime(__DIR__.'/assets/finance-income-regime-calculation.js') ?>"></script>
 <script src="assets/app.js?v=<?= @filemtime(__DIR__.'/assets/app.js') ?>"></script>
 </body>
 </html>
