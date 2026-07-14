@@ -11,6 +11,8 @@ param(
 
     [switch]$SkipArchitect,
 
+    [switch]$UseCodexUserConfig,
+
     [int]$MaxFixAttempts = 2,
 
     [int]$ArchitectTimeoutSeconds = 300,
@@ -522,14 +524,18 @@ function Invoke-CodexPlan {
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
     $codexCmd = Resolve-AgentCommandPath -Name 'codex'
-    $result = Invoke-NativeProcess -StageName 'Architect' -FilePath $codexCmd -ArgumentList @(
-        'exec',
+    $codexConfigArgs = @('--ephemeral')
+    if (-not $UseCodexUserConfig) {
+        $codexConfigArgs += '--ignore-user-config'
+    }
+    $codexArgs = @('exec') + $codexConfigArgs + @(
         '--sandbox', 'read-only',
         '--cd', $RepoRoot,
         '--output-last-message', $planOutputPath,
         '--output-schema', $SchemaPath,
         '-'
-    ) -RunDirectory $RunDirectory -TimeoutSeconds $ArchitectTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
+    )
+    $result = Invoke-NativeProcess -StageName 'Architect' -FilePath $codexCmd -ArgumentList $codexArgs -RunDirectory $RunDirectory -TimeoutSeconds $ArchitectTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
 
     if (-not (Test-Path -LiteralPath $planOutputPath)) {
         throw "Codex planning did not create output file: $planOutputPath"
@@ -575,8 +581,11 @@ function Invoke-CodexReview {
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
     $codexCmd = Resolve-AgentCommandPath -Name 'codex'
-    $result = Invoke-NativeProcess -StageName 'Reviewer' -FilePath $codexCmd -ArgumentList @(
-        'exec',
+    $codexConfigArgs = @('--ephemeral')
+    if (-not $UseCodexUserConfig) {
+        $codexConfigArgs += '--ignore-user-config'
+    }
+    $codexArgs = @('exec') + $codexConfigArgs + @(
         '--sandbox', 'read-only',
         '--cd', $RepoRoot,
         'review',
@@ -584,7 +593,8 @@ function Invoke-CodexReview {
         '--output-last-message', $reviewOutputPath,
         '--output-schema', $SchemaPath,
         '-'
-    ) -RunDirectory $RunDirectory -TimeoutSeconds $ReviewerTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
+    )
+    $result = Invoke-NativeProcess -StageName 'Reviewer' -FilePath $codexCmd -ArgumentList $codexArgs -RunDirectory $RunDirectory -TimeoutSeconds $ReviewerTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
 
     if (-not (Test-Path -LiteralPath $reviewOutputPath)) {
         throw "Codex review did not create output file: $reviewOutputPath"
@@ -690,6 +700,11 @@ Set-Location -LiteralPath $repoRoot
 $resolvedPhasePath = Join-Path $repoRoot $Phase
 $branch = Assert-CleanPreconditions -RepoRoot $repoRoot -ResolvedPhasePath $resolvedPhasePath
 $runDirectory = New-RunDirectory -RepoRoot $repoRoot
+if ($UseCodexUserConfig) {
+    Write-Host 'Codex user config: enabled'
+} else {
+    Write-Host 'Codex user config: isolated'
+}
 $phaseJson = Get-Content -LiteralPath $resolvedPhasePath -Raw
 $phaseObject = Get-PhaseObject -Path $resolvedPhasePath
 $planSchemaPath = Join-Path $repoRoot 'automation/schemas/plan.schema.json'

@@ -41,12 +41,21 @@ Optional flags:
 - `-Push`
 - `-DryRun`
 - `-SkipArchitect`
+- `-UseCodexUserConfig`
 - `-MaxFixAttempts 2`
 - `-ArchitectTimeoutSeconds 300`
 - `-ImplementerTimeoutSeconds 900`
 - `-ReviewerTimeoutSeconds 300`
 - `-HeartbeatSeconds 10`
 - `-VerboseLogs`
+
+By default, the automatic Codex Architect and Reviewer stages run with
+`--ignore-user-config` and `--ephemeral`. This keeps user-level MCP servers,
+hooks, skills, and other global configuration out of non-interactive runs while
+preserving the existing `CODEX_HOME` authentication. Pass `-UseCodexUserConfig`
+to allow the Codex user configuration for those stages; ephemeral mode remains
+enabled. The pipeline logs either `Codex user config: isolated` or
+`Codex user config: enabled` at startup. This option does not affect Claude.
 
 Current `-DryRun` behavior:
 
