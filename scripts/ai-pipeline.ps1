@@ -31,6 +31,23 @@ function Get-PowerShellExecutable {
     return (Get-Process -Id $PID).Path
 }
 
+function Resolve-AgentCommandPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('codex', 'claude')]
+        [string]$Name
+    )
+
+    $appData = [Environment]::GetFolderPath('ApplicationData')
+    $cmdPath = Join-Path $appData "npm/$Name.cmd"
+
+    if (-not (Test-Path -LiteralPath $cmdPath)) {
+        throw "Required agent command not found: $cmdPath"
+    }
+
+    return $cmdPath
+}
+
 function Get-PhaseObject {
     param([string]$Path)
     return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
@@ -82,11 +99,14 @@ function Assert-CleanPreconditions {
         throw 'Working tree must be clean before starting a phase.'
     }
 
-    foreach ($toolName in @('git', 'codex', 'claude', 'node')) {
+    foreach ($toolName in @('git', 'node')) {
         if (-not (Get-Command $toolName -ErrorAction SilentlyContinue)) {
             throw "Required executable not found: $toolName"
         }
     }
+
+    $null = Resolve-AgentCommandPath -Name 'codex'
+    $null = Resolve-AgentCommandPath -Name 'claude'
 
     if (-not (Test-Path -LiteralPath $ResolvedPhasePath)) {
         throw "Phase file not found: $ResolvedPhasePath"
@@ -149,13 +169,60 @@ function Invoke-NativeAndCapture {
         [string]$OutputPath
     )
 
-    $output = & $FilePath @ArgumentList 2>&1
-    $exitCode = $LASTEXITCODE
-    $output | Out-File -LiteralPath $OutputPath -Encoding utf8
+    $argumentDisplay = if ($ArgumentList.Count -gt 0) {
+        ($ArgumentList | ForEach-Object {
+            if ($_ -match '\s') { '"' + $_.Replace('"', '\"') + '"' } else { $_ }
+        }) -join ' '
+    } else {
+        ''
+    }
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $FilePath
+    $startInfo.Arguments = $argumentDisplay
+    $startInfo.WorkingDirectory = (Get-Location).Path
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $null = $process.Start()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+
+    $combined = @()
+    if ($stdout) {
+        $combined += ($stdout -split "`r?`n")
+    }
+    if ($stderr) {
+        $combined += ($stderr -split "`r?`n")
+    }
+    $combined = @($combined | Where-Object { $_ -ne '' })
+    $combined | Out-File -LiteralPath $OutputPath -Encoding utf8
+
+    if ($exitCode -ne 0) {
+        $message = @(
+            'Native command failed.',
+            "Command: $FilePath",
+            "Arguments: $argumentDisplay",
+            "ExitCode: $exitCode",
+            'stderr:',
+            ($stderr.TrimEnd())
+        ) -join [Environment]::NewLine
+        throw $message
+    }
 
     return [pscustomobject]@{
-        output   = @($output)
+        output   = @($combined)
+        stdout   = $stdout
+        stderr   = $stderr
         exitCode = $exitCode
+        command  = $FilePath
+        arguments = @($ArgumentList)
     }
 }
 
@@ -184,17 +251,14 @@ function Invoke-CodexPlan {
     $promptPath = Join-Path $RunDirectory 'architect-prompt.txt'
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
-    $result = Invoke-NativeAndCapture -FilePath 'codex' -ArgumentList @(
+    $codexCmd = Resolve-AgentCommandPath -Name 'codex'
+    $result = Invoke-NativeAndCapture -FilePath $codexCmd -ArgumentList @(
         'exec',
         '--sandbox', 'read-only',
         '--output-last-message',
         '--output-schema', $SchemaPath,
         $prompt
     ) -OutputPath (Join-Path $RunDirectory 'plan.stdout.log')
-
-    if ($result.exitCode -ne 0) {
-        throw 'Codex planning failed.'
-    }
 
     $planText = ($result.output -join [Environment]::NewLine).Trim()
     $planText | Out-File -LiteralPath (Join-Path $RunDirectory 'plan.json') -Encoding utf8
@@ -214,14 +278,11 @@ function Invoke-ClaudeImplementation {
     $promptPath = Join-Path $RunDirectory 'implementer-prompt.txt'
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
-    $result = Invoke-NativeAndCapture -FilePath 'claude' -ArgumentList @(
+    $claudeCmd = Resolve-AgentCommandPath -Name 'claude'
+    $result = Invoke-NativeAndCapture -FilePath $claudeCmd -ArgumentList @(
         '-p',
         $prompt
     ) -OutputPath (Join-Path $RunDirectory 'implementer.stdout.log')
-
-    if ($result.exitCode -ne 0) {
-        throw 'Claude implementation failed.'
-    }
 
     ($result.output -join [Environment]::NewLine) | Out-File -LiteralPath (Join-Path $RunDirectory 'implementer.txt') -Encoding utf8
 }
@@ -239,17 +300,14 @@ function Invoke-CodexReview {
     $promptPath = Join-Path $RunDirectory 'reviewer-prompt.txt'
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
-    $result = Invoke-NativeAndCapture -FilePath 'codex' -ArgumentList @(
+    $codexCmd = Resolve-AgentCommandPath -Name 'codex'
+    $result = Invoke-NativeAndCapture -FilePath $codexCmd -ArgumentList @(
         'review',
         '--sandbox', 'read-only',
         '--output-last-message',
         '--output-schema', $SchemaPath,
         $prompt
     ) -OutputPath (Join-Path $RunDirectory 'review.stdout.log')
-
-    if ($result.exitCode -ne 0) {
-        throw 'Codex review failed.'
-    }
 
     $reviewText = ($result.output -join [Environment]::NewLine).Trim()
     $reviewText | Out-File -LiteralPath (Join-Path $RunDirectory 'review.json') -Encoding utf8
@@ -285,14 +343,11 @@ Blockers:
 $($Blockers -join [Environment]::NewLine)
 "@
 
-    $result = Invoke-NativeAndCapture -FilePath 'claude' -ArgumentList @(
+    $claudeCmd = Resolve-AgentCommandPath -Name 'claude'
+    $result = Invoke-NativeAndCapture -FilePath $claudeCmd -ArgumentList @(
         '-p',
         $prompt
     ) -OutputPath (Join-Path $RunDirectory "fix-$AttemptNumber.stdout.log")
-
-    if ($result.exitCode -ne 0) {
-        throw "Claude fix attempt $AttemptNumber failed."
-    }
 }
 
 function Write-Summary {
