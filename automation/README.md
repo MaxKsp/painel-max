@@ -45,6 +45,7 @@ Optional flags:
 - `-MaxFixAttempts 2`
 - `-ArchitectTimeoutSeconds 300`
 - `-ImplementerTimeoutSeconds 900`
+- `-ClaudePermissionMode acceptEdits`
 - `-ReviewerTimeoutSeconds 300`
 - `-HeartbeatSeconds 10`
 - `-VerboseLogs`
@@ -56,6 +57,29 @@ preserving the existing `CODEX_HOME` authentication. Pass `-UseCodexUserConfig`
 to allow the Codex user configuration for those stages; ephemeral mode remains
 enabled. The pipeline logs either `Codex user config: isolated` or
 `Codex user config: enabled` at startup. This option does not affect Claude.
+
+## Claude Implementer Permissions
+
+The non-interactive Claude Implementer defaults to
+`-ClaudePermissionMode acceptEdits`. It receives only the built-in `Read`,
+`Glob`, `Grep`, `Edit`, and `Write` tools; Bash and web tools are explicitly
+disabled. The process runs from the repository root, receives its prompt over
+stdin, and cannot use `bypassPermissions`.
+
+Immediately after Claude exits, the pipeline reads `git status --porcelain`.
+It stops before deterministic validation when no file changed or when any
+changed file is outside the phase `allowedFiles`. The log records the permission
+mode, allowed tools, working directory, and changed files. Deterministic scope
+and test validation still runs afterward for accepted changes.
+
+The controlled write check can be run independently without running a phase:
+
+```powershell
+.\scripts\test-claude-write.ps1
+```
+
+It permits Claude to create `automation/claude-write-test.txt`, verifies that
+its content is exactly `OK`, and removes it in a `finally` block.
 
 Current `-DryRun` behavior:
 

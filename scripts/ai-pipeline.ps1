@@ -19,6 +19,8 @@ param(
 
     [int]$ImplementerTimeoutSeconds = 900,
 
+    [string]$ClaudePermissionMode = 'acceptEdits',
+
     [int]$ReviewerTimeoutSeconds = 300,
 
     [int]$HeartbeatSeconds = 10,
@@ -586,11 +588,65 @@ function Invoke-ClaudeImplementation {
     $prompt | Out-File -LiteralPath $promptPath -Encoding utf8
 
     $claudeCmd = Resolve-AgentCommandPath -Name 'claude'
-    $result = Invoke-NativeProcess -StageName 'Implementer' -FilePath $claudeCmd -ArgumentList @(
-        '-p'
-    ) -RunDirectory $RunDirectory -TimeoutSeconds $ImplementerTimeoutSeconds -HeartbeatIntervalSeconds $HeartbeatSeconds -StandardInputText $prompt
+    $claudeTools = 'Read,Glob,Grep,Edit,Write'
+    $claudeArgs = @(
+        '-p',
+        '--permission-mode', $ClaudePermissionMode,
+        '--tools', $claudeTools,
+        '--allowedTools', $claudeTools,
+        '--disallowedTools', 'Bash,WebFetch,WebSearch',
+        '--no-session-persistence'
+    )
+
+    Write-Host "Claude permission mode: $ClaudePermissionMode"
+    Write-Host "Claude allowed tools: $claudeTools"
+    Write-Host "Claude working directory: $RepoRoot"
+
+    $result = Invoke-NativeProcess `
+        -StageName 'Implementer' `
+        -FilePath $claudeCmd `
+        -ArgumentList $claudeArgs `
+        -RunDirectory $RunDirectory `
+        -TimeoutSeconds $ImplementerTimeoutSeconds `
+        -HeartbeatIntervalSeconds $HeartbeatSeconds `
+        -StandardInputText $prompt
 
     (Get-LogTextOrEmpty -Text $result.stdout) | Out-File -LiteralPath (Join-Path $RunDirectory 'implementer.txt') -Encoding utf8
+
+    $changedFiles = @(Get-ChangedFiles)
+    if ($changedFiles.Count -eq 0) {
+        throw 'Claude completed without modifying the workspace.'
+    }
+
+    $phaseObject = $PhaseJson | ConvertFrom-Json
+    $allowedFiles = @($phaseObject.allowedFiles | ForEach-Object { $_.ToString().Replace('\', '/') })
+    $outsideAllowlist = @()
+
+    foreach ($file in $changedFiles) {
+        $isAllowed = $false
+        foreach ($rule in $allowedFiles) {
+            if ($rule.EndsWith('/')) {
+                if ($file.StartsWith($rule, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $isAllowed = $true
+                    break
+                }
+            } elseif ($file.Equals($rule, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isAllowed = $true
+                break
+            }
+        }
+
+        if (-not $isAllowed) {
+            $outsideAllowlist += $file
+        }
+    }
+
+    Write-Host 'Claude changed files:'
+    $changedFiles | ForEach-Object { Write-Host " - $_" }
+
+    if ($outsideAllowlist.Count -gt 0) {
+        throw "Claude modified files outside the phase allowlist: $($outsideAllowlist -join ', ')"
+    }
 }
 
 function Invoke-CodexReview {
@@ -739,6 +795,9 @@ Set-Location -LiteralPath $repoRoot
 $resolvedPhasePath = Join-Path $repoRoot $Phase
 $branch = Assert-CleanPreconditions -RepoRoot $repoRoot -ResolvedPhasePath $resolvedPhasePath
 $runDirectory = New-RunDirectory -RepoRoot $repoRoot
+if ($ClaudePermissionMode -eq 'bypassPermissions') {
+    throw 'ClaudePermissionMode bypassPermissions is prohibited.'
+}
 if ($UseCodexUserConfig) {
     Write-Host 'Codex user config: enabled'
 } else {
