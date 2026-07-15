@@ -2035,7 +2035,6 @@ const CATEGORIA_LABEL = { moradia:'Moradia', transporte:'Transporte', alimentaca
 
 /* categorias = presets fixos + as que o usuário cria (kv custom_categories) */
 let __customCats = [];
-function catSlug(name){ return (name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40) || ('cat'+Date.now()); }
 function allCategories(){
   const out = {...CATEGORIA_LABEL};
   __customCats.forEach(c=>{ if (c && c.key) out[c.key] = c.label; });
