@@ -76,11 +76,6 @@ this documentation update:
 
 ## Residual risks and follow-up
 
-- A manual authenticated browser smoke test is still required before merge or
-  deployment. It should cover Finance boot, account summary, end-of-month
-  projection, invoice reminders, account grouping, expenses, income,
-  transfers, invoice payment, OFX import, annual report, console errors, and
-  missing script requests.
 - `assets/app.js` still contains an unused calculation chain at the beginning
   of `renderFinance()` (`incomeFromLines`, `income`, `outflow`, `saldo`, and a
   local `hasVariableIncome`). Its removal is intentionally excluded from this
@@ -90,6 +85,21 @@ this documentation update:
   migration.
 - Full-set replacement and mixed relational/KV bootstrap behavior remain
   preserved legacy contracts, not newly recommended designs.
+
+## Authenticated browser smoke test
+
+The final authenticated browser smoke test passed on 2026-07-15. It covered:
+
+- Finance boot without application errors or missing script requests;
+- account summary, end-of-month projection, and invoice reminders;
+- account grouping, expenses, income, transfers, and invoice payment;
+- OFX preview/import with the local paid-plan gate enabled;
+- CSV export after financial entries existed;
+- annual report generation.
+
+`tests/fixtures/manual-smoke-2026-07-15.ofx` is retained as the reusable manual
+fixture for OFX smoke testing. It contains three expenses and two income rows
+with unique FITIDs and is accepted by the current project parser.
 
 ## Rollback strategy
 
@@ -103,6 +113,6 @@ No schema or data repair is required for the frontend extraction phases.
 
 ## Completion decision
 
-No additional extraction phase is required for this roadmap. Remaining work
-is operational validation, optional dead-code cleanup, and integration into
-the target branch.
+No additional extraction phase is required for this roadmap. Automated and
+manual operational validation are complete. Remaining work is optional
+dead-code cleanup and integration into the target branch.
