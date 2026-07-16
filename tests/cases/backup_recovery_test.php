@@ -61,6 +61,66 @@ final class BkSpyPdo extends PDO {
     }
 }
 
+/**
+ * Stream wrapper controlado que forca uma escrita GENUINAMENTE parcial:
+ * a primeira frame grande (>=50 bytes — o cabecalho pequeno do container
+ * sempre escreve normal) recebe so 5 bytes na primeira tentativa e
+ * DEPOIS um stall (stream_write retorna 0) — isso faz o fwrite() do PHP
+ * devolver um total PARCIAL (5, nem false nem completo) pra quem chamou,
+ * exatamente o cenario que BackupArtifactWriter::writeRaw() precisa
+ * tratar repetindo o fwrite() com o restante. So acontece uma vez; toda
+ * escrita depois disso e normal, pra provar que o restante completa.
+ */
+final class Bkt4cPartialWriteStream {
+    public $context;
+    /** @var resource */
+    private $inner;
+    private bool $triggered = false;
+    private bool $stalledOnce = false;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool {
+        $real = substr($path, strlen('bkt4cpartial://'));
+        $inner = fopen($real, $mode);
+        if ($inner === false) {
+            return false;
+        }
+        $this->inner = $inner;
+        return true;
+    }
+
+    public function stream_write(string $data): int {
+        $len = strlen($data);
+        if ($len < 50) {
+            return (int)fwrite($this->inner, $data);
+        }
+        if (!$this->triggered) {
+            $this->triggered = true;
+            return (int)fwrite($this->inner, substr($data, 0, min(5, $len)));
+        }
+        if (!$this->stalledOnce) {
+            $this->stalledOnce = true;
+            return 0;
+        }
+        return (int)fwrite($this->inner, $data);
+    }
+
+    public function stream_close(): void {
+        fclose($this->inner);
+    }
+
+    public function stream_eof(): bool {
+        return feof($this->inner);
+    }
+
+    public function stream_flush(): bool {
+        return fflush($this->inner);
+    }
+
+    public function stream_stat(): array|false {
+        return fstat($this->inner);
+    }
+}
+
 function bkt_make_key(): string {
     return random_bytes(SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES);
 }
@@ -221,6 +281,18 @@ return function (): void {
         $caught = true;
     }
     test_assert_true($caught, 'backup_contract_validate() must reject a backup contract missing the classification of a real schema table.');
+
+    // scripts/backup.php e scripts/restore.php sao requeridos cedo (nao so na secao E)
+    // porque as secoes de --force/safe-replace e snapshot mais abaixo precisam de
+    // backup_cli_run()/backup_safe_replace(). require_once e idempotente.
+    if (!defined('BACKUP_CLI_NO_AUTOEXEC')) {
+        define('BACKUP_CLI_NO_AUTOEXEC', true);
+    }
+    require_once $repoRoot . '/scripts/backup.php';
+    if (!defined('RESTORE_CLI_NO_AUTOEXEC')) {
+        define('RESTORE_CLI_NO_AUTOEXEC', true);
+    }
+    require_once $repoRoot . '/scripts/restore.php';
 
     // ==== B: criptografia (BackupCrypto.php) ====
 
@@ -441,6 +513,42 @@ return function (): void {
         bkt_remove_dir($cryptoScratch);
     }
 
+    // ==== B2: escrita parcial — BackupArtifactWriter deve repetir fwrite ate completar ====
+
+    if (!in_array('bkt4cpartial', stream_get_wrappers(), true)) {
+        stream_wrapper_register('bkt4cpartial', Bkt4cPartialWriteStream::class);
+    }
+    $partialScratch = bkt_scratch_dir();
+    try {
+        $key = bkt_make_key();
+        $realPath = $partialScratch . '/partial-writes.bin';
+        $handle = fopen('bkt4cpartial://' . $realPath, 'wb');
+        test_assert_true($handle !== false, 'Test setup: could not open the partial-write stream wrapper.');
+
+        $writer = new BackupArtifactWriter($handle, $key);
+        $writer->writeFrame(str_repeat('A', 500));
+        $writer->writeFrame('final chunk with unicode çãü ☺', true);
+        fclose($handle);
+
+        test_assert_true($writer->finalWritten(), 'The writer must still reach TAG_FINAL despite the underlying stream only accepting a partial write along the way.');
+
+        // Le de volta pelo arquivo REAL (wrapper normal), pra provar que o
+        // artefato final e completo e valido apesar de uma fwrite() interna
+        // ter devolvido um total PARCIAL (nem false, nem completo).
+        $readHandle = fopen($realPath, 'rb');
+        $reader = new BackupArtifactReader($readHandle, $key);
+        $frame1 = $reader->readFrame();
+        $frame2 = $reader->readFrame();
+        $frame3 = $reader->readFrame();
+        fclose($readHandle);
+
+        test_assert_same(str_repeat('A', 500), $frame1['plaintext'] ?? null, 'The frame written during the partial-write condition must still round-trip exactly.');
+        test_assert_same('final chunk with unicode çãü ☺', $frame2['plaintext'] ?? null, 'Subsequent frames must round-trip exactly too, unicode included.');
+        test_assert_true($frame3 === null && $reader->sawFinal(), 'The artifact must end cleanly with TAG_FINAL despite the partial write in the middle.');
+    } finally {
+        bkt_remove_dir($partialScratch);
+    }
+
     // ==== C: backup logico (DatabaseBackup.php) ====
 
     $backupScratch = bkt_scratch_dir();
@@ -560,6 +668,269 @@ return function (): void {
         bkt_remove_dir($symlinkOutsideDir);
     } finally {
         bkt_remove_dir($backupScratch);
+    }
+
+    // ==== C2: backup_cli_run() fim-a-fim — --force / substituicao segura ====
+
+    $forceScratch = bkt_scratch_dir();
+    try {
+        $key = bkt_make_key();
+        $sourceDb = bkt_make_sqlite();
+        $sourceDb->exec("INSERT INTO users (id, name, email) VALUES (1, 'Ana', 'ana@example.com')");
+
+        $dest = $forceScratch . '/cli-backup.bin';
+
+        // destino existente sem --force falha e permanece intacto.
+        file_put_contents($dest, 'PREVIOUS_BACKUP_CONTENT');
+        $noForceCaught = false;
+        try {
+            backup_cli_run($sourceDb, bkt_backup_contract(), bkt_schema_contract(), $key, $dest, false, $repoRoot);
+        } catch (InvalidArgumentException) {
+            $noForceCaught = true;
+        }
+        test_assert_true($noForceCaught, 'backup_cli_run() without --force must fail when the destination already exists.');
+        test_assert_same('PREVIOUS_BACKUP_CONTENT', (string)file_get_contents($dest), 'The existing destination must remain byte-for-byte intact after a failed no-force attempt.');
+
+        // com --force substitui de fato.
+        $report = backup_cli_run($sourceDb, bkt_backup_contract(), bkt_schema_contract(), $key, $dest, true, $repoRoot);
+        $afterForce = (string)file_get_contents($dest);
+        test_assert_true($afterForce !== 'PREVIOUS_BACKUP_CONTENT', '--force must actually replace the previous destination content.');
+        test_assert_same(['users' => 1, 'accounts' => 0], $report['tables'], 'Test setup sanity: the forced backup must have run successfully.');
+        $leftoversAfterForce = array_filter(glob($forceScratch . '/*') ?: [], static fn(string $p): bool => basename($p) !== 'cli-backup.bin');
+        test_assert_same([], array_values($leftoversAfterForce), 'A successful --force replace must leave no temporary or rescue files behind.');
+
+        // O rename() real deste sistema pode ate sobrescrever um destino
+        // existente (varia por versao/SO) — isso mascararia o bug real do
+        // Windows relatado ("rename() falha se o destino existir"). Pra
+        // provar a correcao de verdade, simula esse comportamento com um
+        // renamer injetado que RECUSA sobrescrever (falha sempre que o
+        // destino ja existe) e confirma que backup_safe_replace() ainda
+        // assim consegue substituir (resgatando o arquivo antigo primeiro).
+        $winLikeScratch = bkt_scratch_dir();
+        try {
+            $winDest = $winLikeScratch . '/windows-like.bin';
+            $winTmp = $winLikeScratch . '/.windows-like.bin.tmp-test';
+            file_put_contents($winDest, 'OLD_CONTENT_WINDOWS_LIKE');
+            file_put_contents($winTmp, 'NEW_CONTENT_WINDOWS_LIKE');
+            $refusesOverwriteRenamer = static function (string $from, string $to): bool {
+                if (file_exists($to)) {
+                    return false; // simula rename() que nunca sobrescreve destino existente
+                }
+                return @rename($from, $to);
+            };
+            backup_safe_replace($winTmp, $winDest, true, $refusesOverwriteRenamer);
+            test_assert_same('NEW_CONTENT_WINDOWS_LIKE', (string)file_get_contents($winDest), 'backup_safe_replace() must still succeed in replacing an existing destination even with a rename() that refuses to ever overwrite (Windows-like behavior) — by rescuing the old file out of the way first, then moving the new one in.');
+            test_assert_true(!file_exists($winTmp), 'The temporary file must be gone after a successful safe replace.');
+            $winLeftovers = array_filter(glob($winLikeScratch . '/*') ?: [], static fn(string $p): bool => basename($p) !== 'windows-like.bin');
+            test_assert_same([], array_values($winLeftovers), 'No rescue file may remain after a successful replace, even under the refuses-to-overwrite renamer.');
+        } finally {
+            bkt_remove_dir($winLikeScratch);
+        }
+
+        // falha na finalizacao preserva o backup anterior e remove temporarios
+        // (backup_safe_replace() com um renamer injetado que falha SO na
+        // substituicao final, nao na etapa de resgate do arquivo anterior).
+        $failDest = $forceScratch . '/fail-finalize.bin';
+        file_put_contents($failDest, 'ORIGINAL_TO_PRESERVE');
+        [$failFinalPath, $failTmpPath] = backup_resolve_destination($failDest, $repoRoot, true);
+        file_put_contents($failTmpPath, 'NEW_TMP_CONTENT_NEVER_PUBLISHED');
+        $failingRenamer = static function (string $from, string $to) use ($failTmpPath): bool {
+            if ($from === $failTmpPath) {
+                return false;
+            }
+            return @rename($from, $to);
+        };
+        $finalizeCaught = false;
+        try {
+            backup_safe_replace($failTmpPath, $failFinalPath, true, $failingRenamer);
+        } catch (BackupCryptoException) {
+            $finalizeCaught = true;
+        }
+        test_assert_true($finalizeCaught, 'backup_safe_replace() must throw when the final rename fails.');
+        test_assert_same('ORIGINAL_TO_PRESERVE', (string)file_get_contents($failFinalPath), 'A failed finalize must preserve the previous backup content exactly — never left missing or half-replaced.');
+        test_assert_true(!file_exists($failTmpPath), 'A failed finalize must remove the temporary file.');
+        $leftoversAfterFail = array_filter(glob($forceScratch . '/*') ?: [], static fn(string $p): bool => !in_array(basename($p), ['cli-backup.bin', 'fail-finalize.bin'], true));
+        test_assert_same([], array_values($leftoversAfterFail), 'A failed finalize must leave no rescue file behind either.');
+
+        // arquivo aparece DEPOIS de backup_resolve_destination() e ANTES da
+        // publicacao (TOCTOU), sem --force: nao pode ser sobrescrito.
+        $toctouDest = $forceScratch . '/toctou.bin';
+        [$toctouFinalPath, $toctouTmpPath] = backup_resolve_destination($toctouDest, $repoRoot, false);
+        file_put_contents($toctouTmpPath, 'NEW_TMP_NEVER_PUBLISHED');
+        // so agora, depois da resolucao, o destino "aparece" (ex: outro processo concorrente).
+        file_put_contents($toctouFinalPath, 'RACE_WINNER_CONTENT');
+        $toctouNoForceCaught = false;
+        try {
+            backup_safe_replace($toctouTmpPath, $toctouFinalPath, false);
+        } catch (InvalidArgumentException) {
+            $toctouNoForceCaught = true;
+        }
+        test_assert_true($toctouNoForceCaught, 'backup_safe_replace() without --force must reject a destination that appeared after resolution and before publication.');
+        test_assert_same('RACE_WINNER_CONTENT', (string)file_get_contents($toctouFinalPath), 'Without --force, the destination that appeared during the race must remain untouched.');
+        test_assert_true(!file_exists($toctouTmpPath), 'Without --force, the temporary file must still be cleaned up (normal cleanup only, no move).');
+        @unlink($toctouFinalPath);
+
+        // mesmo cenario, mas com --force: a substituicao funciona.
+        $toctouForceDest = $forceScratch . '/toctou-force.bin';
+        [$toctouForceFinalPath, $toctouForceTmpPath] = backup_resolve_destination($toctouForceDest, $repoRoot, true);
+        file_put_contents($toctouForceTmpPath, 'NEW_TMP_TO_PUBLISH');
+        file_put_contents($toctouForceFinalPath, 'RACE_WINNER_TO_BE_REPLACED');
+        backup_safe_replace($toctouForceTmpPath, $toctouForceFinalPath, true);
+        test_assert_same('NEW_TMP_TO_PUBLISH', (string)file_get_contents($toctouForceFinalPath), 'With --force, a destination that appeared during the race must still be replaced.');
+        test_assert_true(!file_exists($toctouForceTmpPath), 'With --force, the temporary file must be gone after a successful replace.');
+        $toctouForceRescueLeftovers = array_filter(glob($forceScratch . '/*') ?: [], static fn(string $p): bool => str_contains(basename($p), 'toctou-force') && basename($p) !== 'toctou-force.bin');
+        test_assert_same([], array_values($toctouForceRescueLeftovers), 'A successful --force replace under a race must leave no rescue or temporary files behind.');
+
+        // publicacao E restauracao do resgate falham: o resgate antigo deve
+        // permanecer recuperavel (nunca apagado), e o temporario novo removido.
+        $bothFailDest = $forceScratch . '/both-fail.bin';
+        file_put_contents($bothFailDest, 'ORIGINAL_MUST_SURVIVE_IN_RESCUE');
+        [$bothFailFinalPath, $bothFailTmpPath] = backup_resolve_destination($bothFailDest, $repoRoot, true);
+        file_put_contents($bothFailTmpPath, 'NEW_TMP_NEVER_PUBLISHED_EITHER');
+        $seenRescuePath = null;
+        $bothFailRenamer = static function (string $from, string $to) use ($bothFailTmpPath, &$seenRescuePath): bool {
+            if ($from === $bothFailTmpPath) {
+                return false; // publicacao do novo arquivo sempre falha
+            }
+            // a primeira chamada que nao e a publicacao e o resgate do antigo pro nome .prev-*
+            if ($seenRescuePath === null) {
+                $seenRescuePath = $to;
+                return @rename($from, $to);
+            }
+            // qualquer tentativa de restaurar o resgate de volta tambem falha
+            return false;
+        };
+        $bothFailCaught = null;
+        try {
+            backup_safe_replace($bothFailTmpPath, $bothFailFinalPath, true, $bothFailRenamer);
+        } catch (Throwable $e) {
+            $bothFailCaught = $e;
+        }
+        test_assert_true($bothFailCaught instanceof BackupRescueRestoreFailedException, 'When both the final rename AND the rescue restoration fail, a specific BackupRescueRestoreFailedException must be thrown.');
+        test_assert_true($seenRescuePath !== null && file_exists($seenRescuePath), 'The rescue file must remain on disk (never deleted) when its restoration also fails.');
+        test_assert_same('ORIGINAL_MUST_SURVIVE_IN_RESCUE', (string)file_get_contents($seenRescuePath), 'The previous backup bytes must remain fully recoverable in the surviving rescue file.');
+        test_assert_true(!file_exists($bothFailTmpPath), 'The new temporary file must still be removed even when both renames fail.');
+        test_assert_true(!file_exists($bothFailFinalPath), 'The destination path itself must not silently reappear with wrong content when both renames failed.');
+        if ($seenRescuePath !== null) {
+            @unlink($seenRescuePath);
+        }
+    } finally {
+        bkt_remove_dir($forceScratch);
+    }
+
+    // ==== C3: snapshot consistente — begin antes da 1a consulta, commit apos TAG_FINAL, rollback em falha ====
+
+    $snapshotScratch = bkt_scratch_dir();
+    try {
+        $key = bkt_make_key();
+
+        // begin/commit chamados, rollback nunca chamado, no caminho de sucesso.
+        $eventLog = [];
+        $sourceDb = bkt_make_sqlite();
+        $sourceDb->exec("INSERT INTO users (id, name, email) VALUES (1, 'Ana', NULL)");
+        $snapshotBegin = function (PDO $db) use (&$eventLog): void {
+            $eventLog[] = 'begin';
+            $db->beginTransaction();
+        };
+        $snapshotCommit = function (PDO $db) use (&$eventLog): void {
+            $eventLog[] = 'commit';
+            $db->commit();
+        };
+        $snapshotRollback = function (PDO $db) use (&$eventLog): void {
+            $eventLog[] = 'rollback';
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+        };
+        $artifactPathOk = $snapshotScratch . '/snapshot-ok.bin';
+        $handleOk = fopen($artifactPathOk, 'wb');
+        $writerOk = new BackupArtifactWriter($handleOk, $key);
+        $backupOk = new DatabaseBackup($sourceDb, bkt_backup_contract(), bkt_schema_contract(), $writerOk, null, $snapshotBegin, $snapshotCommit, $snapshotRollback);
+        $backupOk->run();
+        fclose($handleOk);
+        test_assert_same(['begin', 'commit'], $eventLog, 'A successful run() must call snapshotBegin once and snapshotCommit once, in that order, and never snapshotRollback.');
+        test_assert_true($writerOk->finalWritten(), 'Test setup sanity: the successful run must have written TAG_FINAL.');
+
+        // begin acontece ANTES da primeira consulta ao banco (via PDO espiao
+        // compartilhando o mesmo log que os callables de snapshot).
+        $spyDb = new BkSpyPdo('sqlite::memory:');
+        $spyDb->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NULL)');
+        $spyDb->exec('CREATE TABLE accounts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, balance TEXT NOT NULL)');
+        $spyDb->calls = []; // reset: so quer capturar o que DatabaseBackup faz a partir daqui
+        $orderedBegin = function (PDO $db) use ($spyDb): void { $spyDb->calls[] = 'snapshot_begin'; };
+        $orderedCommit = function (PDO $db) use ($spyDb): void { $spyDb->calls[] = 'snapshot_commit'; };
+        $orderedRollback = function (PDO $db) use ($spyDb): void { $spyDb->calls[] = 'snapshot_rollback'; };
+        $artifactPathOrder = $snapshotScratch . '/snapshot-order.bin';
+        $handleOrder = fopen($artifactPathOrder, 'wb');
+        $writerOrder = new BackupArtifactWriter($handleOrder, $key);
+        $backupOrder = new DatabaseBackup($spyDb, bkt_backup_contract(), bkt_schema_contract(), $writerOrder, null, $orderedBegin, $orderedCommit, $orderedRollback);
+        $backupOrder->run();
+        fclose($handleOrder);
+
+        $beginPos = array_search('snapshot_begin', $spyDb->calls, true);
+        $commitPos = array_search('snapshot_commit', $spyDb->calls, true);
+        $firstDbCallPos = null;
+        foreach ($spyDb->calls as $i => $entry) {
+            if ($entry !== 'snapshot_begin' && $entry !== 'snapshot_commit' && $entry !== 'snapshot_rollback') {
+                $firstDbCallPos = $i;
+                break;
+            }
+        }
+        test_assert_same(0, $beginPos, 'snapshotBegin must be the very first interaction with the database — before any query/prepare/exec.');
+        test_assert_true($firstDbCallPos !== null && $beginPos < $firstDbCallPos, 'snapshotBegin must happen strictly before the first SELECT/prepare.');
+        test_assert_same(count($spyDb->calls) - 1, $commitPos, 'snapshotCommit must be the LAST interaction — after every query the backup makes (i.e. after the trailer/TAG_FINAL write, since nothing touches the DB after that).');
+
+        // rollback em falha: exportar uma tabela inexistente forca a excecao.
+        $rollbackLog = [];
+        $failingSourceDb = bkt_make_sqlite();
+        $rollbackBegin = function (PDO $db) use (&$rollbackLog): void { $rollbackLog[] = 'begin'; };
+        $rollbackCommit = function (PDO $db) use (&$rollbackLog): void { $rollbackLog[] = 'commit'; };
+        $rollbackRollback = function (PDO $db) use (&$rollbackLog): void { $rollbackLog[] = 'rollback'; };
+        $failingBackupContract = bkt_backup_contract();
+        $failingBackupContract['table_order'] = ['users', 'accounts', 'does_not_exist'];
+        $failingBackupContract['tables']['does_not_exist'] = ['kind' => 'persistent', 'columns' => ['id'], 'primary_key' => ['id'], 'cleanup' => 'delete_all'];
+        $failingSchemaContract = bkt_schema_contract();
+        $failingSchemaContract['does_not_exist'] = ['columns' => ['id' => ['type' => 'int', 'nullable' => false]], 'primary_key' => ['id'], 'indexes' => [], 'foreign_keys' => []];
+        $rollbackArtifactPath = $snapshotScratch . '/snapshot-rollback.bin';
+        $rollbackHandle = fopen($rollbackArtifactPath, 'wb');
+        $rollbackWriter = new BackupArtifactWriter($rollbackHandle, $key);
+        $rollbackBackup = new DatabaseBackup($failingSourceDb, $failingBackupContract, $failingSchemaContract, $rollbackWriter, null, $rollbackBegin, $rollbackCommit, $rollbackRollback);
+        $rollbackCaught = false;
+        try {
+            $rollbackBackup->run();
+        } catch (Throwable) {
+            $rollbackCaught = true;
+        } finally {
+            fclose($rollbackHandle);
+        }
+        test_assert_true($rollbackCaught, 'Test setup: exporting a non-existent table must fail.');
+        test_assert_same(['begin', 'rollback'], $rollbackLog, 'A failure during export must call snapshotRollback, and snapshotCommit must NEVER be called in that case.');
+
+        // rollback injetado que TAMBEM lanca: a excecao original do export
+        // deve ser a que chega ao chamador, nunca a do rollback.
+        $throwingFailingSourceDb = bkt_make_sqlite();
+        $throwingBegin = static function (PDO $db): void {};
+        $throwingCommit = static function (PDO $db): void {};
+        $throwingRollback = static function (PDO $db): void {
+            throw new RuntimeException('rollback itself exploded');
+        };
+        $throwingArtifactPath = $snapshotScratch . '/snapshot-rollback-throws.bin';
+        $throwingHandle = fopen($throwingArtifactPath, 'wb');
+        $throwingWriter = new BackupArtifactWriter($throwingHandle, $key);
+        $throwingBackup = new DatabaseBackup($throwingFailingSourceDb, $failingBackupContract, $failingSchemaContract, $throwingWriter, null, $throwingBegin, $throwingCommit, $throwingRollback);
+        $throwingCaughtException = null;
+        try {
+            $throwingBackup->run();
+        } catch (Throwable $e) {
+            $throwingCaughtException = $e;
+        } finally {
+            fclose($throwingHandle);
+        }
+        test_assert_true($throwingCaughtException !== null, 'Test setup: exporting a non-existent table must still fail even when the rollback callable also throws.');
+        test_assert_true(!($throwingCaughtException instanceof RuntimeException) || $throwingCaughtException->getMessage() !== 'rollback itself exploded', 'A failing snapshotRollback must never replace the original export exception with its own.');
+        test_assert_true($throwingCaughtException instanceof PDOException, 'The exception that reaches the caller must be the original export failure (a PDOException from the missing table), not the rollback failure.');
+    } finally {
+        bkt_remove_dir($snapshotScratch);
     }
 
     // ==== D: restauracao isolada (DatabaseRestore.php) ====
@@ -755,16 +1126,57 @@ return function (): void {
         bkt_remove_dir($restoreScratch);
     }
 
-    // ==== E: CLI — parsers puros, sem tocar banco/env real ====
+    // ==== D2: pos-validacao bloqueia sucesso ====
 
-    if (!defined('BACKUP_CLI_NO_AUTOEXEC')) {
-        define('BACKUP_CLI_NO_AUTOEXEC', true);
+    $postValidateScratch = bkt_scratch_dir();
+    try {
+        $key = bkt_make_key();
+        $sourceDb = bkt_make_sqlite();
+        $sourceDb->exec("INSERT INTO users (id, name, email) VALUES (1, 'Ana', NULL)");
+        $artifactPath = $postValidateScratch . '/for-postvalidate.bin';
+        bkt_write_real_artifact($artifactPath, $key, $sourceDb);
+
+        $targetDb = bkt_make_sqlite();
+        bkt_add_isolation_marker($targetDb);
+
+        // Introspector com estado: primeira chamada (preflight) reporta o
+        // schema batendo; segunda chamada (pos-restore) reporta incompativel.
+        // Simula um schema que ficou incompativel durante a janela da
+        // restauracao, sem precisar de nenhum truque no artefato em si.
+        $callCount = 0;
+        $statefulIntrospectorFactory = function (PDO $db) use (&$callCount): SchemaIntrospector {
+            $callCount++;
+            return $callCount === 1 ? bkt_matching_introspector() : new BkFakeSchemaIntrospector([]);
+        };
+
+        $restore = new DatabaseRestore($targetDb, bkt_backup_contract(), bkt_schema_contract(), $key, $artifactPath, $statefulIntrospectorFactory);
+        $blockedCaught = false;
+        try {
+            $restore->run();
+        } catch (BackupCryptoException) {
+            $blockedCaught = true;
+        }
+        test_assert_true($blockedCaught, 'run() must throw when the post-restore schema audit does not pass — it must NEVER report success in that case.');
+
+        // Os dados ja foram commitados na propria restauracao (a falha e so
+        // detectada depois, na pos-validacao) — mas nada disso pode ser
+        // reportado como sucesso pro operador.
+        $usersCount = (int)$targetDb->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        test_assert_same(1, $usersCount, 'Test setup sanity: the restore itself (transaction/commit) must have already succeeded before post-validation ran and blocked the final report.');
+
+        // postValidate() isolado tambem deve lancar diretamente, nao so via run().
+        $directPostValidateCaught = false;
+        try {
+            $restore->postValidate(['users' => 1]);
+        } catch (BackupCryptoException) {
+            $directPostValidateCaught = true;
+        }
+        test_assert_true($directPostValidateCaught, 'postValidate() must itself throw (not just return passed=false) when the post-restore schema audit fails.');
+    } finally {
+        bkt_remove_dir($postValidateScratch);
     }
-    require_once $repoRoot . '/scripts/backup.php';
-    if (!defined('RESTORE_CLI_NO_AUTOEXEC')) {
-        define('RESTORE_CLI_NO_AUTOEXEC', true);
-    }
-    require_once $repoRoot . '/scripts/restore.php';
+
+    // ==== E: CLI — parsers puros, sem tocar banco/env real ====
 
     test_assert_same(['output' => '/tmp/x.orbybak', 'force' => false], backup_cli_parse_args(['--output=/tmp/x.orbybak']), 'backup CLI must parse --output.');
     test_assert_same(['output' => '/tmp/x.orbybak', 'force' => true], backup_cli_parse_args(['--output=/tmp/x.orbybak', '--force']), 'backup CLI must parse --force.');

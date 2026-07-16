@@ -182,6 +182,115 @@ function backup_resolve_destination(string $destPath, string $repoRoot, bool $fo
 }
 
 /**
+ * Lancada so quando a substituicao final falha E a tentativa de
+ * restaurar o arquivo de resgate de volta TAMBEM falha (filesystem
+ * recusando as duas operacoes). O resgate e deliberadamente preservado
+ * — nunca apagado nesse caso — pra permitir recuperacao manual; esta
+ * excecao existe justamente pra nunca alegar, nesse cenario, que o
+ * destino anterior continua disponivel no lugar esperado.
+ */
+final class BackupRescueRestoreFailedException extends BackupCryptoException {
+    public function __construct() {
+        parent::__construct('could not finalize the backup and could not restore the previous backup automatically; a rescue file was preserved in the destination directory for manual recovery');
+    }
+}
+
+/**
+ * Substitui $finalPath por $tmpPath com seguranca, respeitando $force ATE
+ * o momento da publicacao — nao so no momento em que
+ * backup_resolve_destination() foi chamado. Isso cobre um arquivo que
+ * apareca em $finalPath DEPOIS da resolucao e ANTES da publicacao: sem
+ * --force, a publicacao falha sem mover ou alterar o destino/temporario
+ * alem da limpeza normal do temporario.
+ *
+ * Com $force=true (ou destino ainda ausente), funciona mesmo em
+ * plataformas onde rename() nao sobrescreve um destino existente
+ * (Windows, em certas versoes/condicoes): se $finalPath ja existir,
+ * primeiro o move pra um nome de resgate; so entao tenta mover $tmpPath
+ * pro lugar. Se esse segundo rename falhar, tenta restaurar o resgate de
+ * volta pro destino — o retorno dessa restauracao NUNCA e ignorado: se
+ * ela tambem falhar, o resgate e preservado (nunca apagado) e
+ * BackupRescueRestoreFailedException e lancada, nunca alegando que o
+ * destino anterior ficou disponivel. So remove o resgate quando a
+ * substituicao da certo. $renamer e injetavel pra testar essas falhas
+ * sem depender de truques especificos de SO.
+ */
+function backup_safe_replace(string $tmpPath, string $finalPath, bool $force, ?callable $renamer = null): void {
+    $renamer ??= static fn(string $from, string $to): bool => @rename($from, $to);
+
+    $exists = file_exists($finalPath);
+    if ($exists && !$force) {
+        @unlink($tmpPath);
+        throw new InvalidArgumentException('backup destination already exists (use --force to overwrite)');
+    }
+
+    $rescuePath = null;
+    if ($exists) {
+        $rescuePath = $finalPath . '.prev-' . bin2hex(random_bytes(8));
+        if (!$renamer($finalPath, $rescuePath)) {
+            @unlink($tmpPath);
+            throw new BackupCryptoException('could not prepare to replace the existing backup file');
+        }
+    }
+
+    if ($renamer($tmpPath, $finalPath)) {
+        if ($rescuePath !== null) {
+            @unlink($rescuePath);
+        }
+        return;
+    }
+
+    if ($rescuePath !== null) {
+        if (!$renamer($rescuePath, $finalPath)) {
+            @unlink($tmpPath);
+            throw new BackupRescueRestoreFailedException();
+        }
+    }
+
+    @unlink($tmpPath);
+    throw new BackupCryptoException('could not finalize the backup file');
+}
+
+/**
+ * Default do controle de snapshot: MySQL usa
+ * START TRANSACTION WITH CONSISTENT SNAPSHOT de verdade (isolamento
+ * REPEATABLE READ). Qualquer outro driver (ex: SQLite nos testes) usa
+ * uma transacao comum — nunca finge ter a mesma garantia de consistent
+ * snapshot que o MySQL, so um isolamento razoavel pra teste.
+ */
+function backup_default_snapshot_begin(PDO $db): void {
+    if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+        $db->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        $db->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+        return;
+    }
+    $db->beginTransaction();
+}
+
+function backup_default_snapshot_commit(PDO $db): void {
+    if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+        $db->exec('COMMIT');
+        return;
+    }
+    $db->commit();
+}
+
+/** Rollback protegido: falha ao desfazer nunca pode mascarar a excecao original que motivou o rollback. */
+function backup_default_snapshot_rollback(PDO $db): void {
+    try {
+        if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $db->exec('ROLLBACK');
+            return;
+        }
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+    } catch (Throwable) {
+        // Falha no rollback nunca pode mascarar a excecao original.
+    }
+}
+
+/**
  * Backup logico de todas as tabelas persistentes, streamado direto pro
  * BackupArtifactWriter — nunca fetchAll() da tabela inteira, sempre
  * SELECT com colunas explicitas e ORDER BY pela primary key. Cada linha
@@ -196,54 +305,87 @@ final class DatabaseBackup {
     private BackupArtifactWriter $writer;
     /** @var callable(): string */
     private $clock;
+    /** @var callable(PDO): void */
+    private $snapshotBegin;
+    /** @var callable(PDO): void */
+    private $snapshotCommit;
+    /** @var callable(PDO): void */
+    private $snapshotRollback;
 
     public function __construct(
         PDO $db,
         array $backupContract,
         array $schemaContract,
         BackupArtifactWriter $writer,
-        ?callable $clock = null
+        ?callable $clock = null,
+        ?callable $snapshotBegin = null,
+        ?callable $snapshotCommit = null,
+        ?callable $snapshotRollback = null
     ) {
         $this->db = $db;
         $this->schemaContract = schema_auditor_validate_contract($schemaContract);
         $this->backupContract = backup_contract_validate($backupContract, $this->schemaContract);
         $this->writer = $writer;
         $this->clock = $clock ?? static fn(): string => gmdate('Y-m-d\TH:i:s\Z');
+        $this->snapshotBegin = $snapshotBegin ?? backup_default_snapshot_begin(...);
+        $this->snapshotCommit = $snapshotCommit ?? backup_default_snapshot_commit(...);
+        $this->snapshotRollback = $snapshotRollback ?? backup_default_snapshot_rollback(...);
     }
 
-    /** @return array{tables: array<string,int>, total_rows: int, bytes_written: int} */
+    /**
+     * Le todas as tabelas persistentes a partir de um UNICO snapshot
+     * consistente: o snapshot comeca ANTES da primeira consulta (inclusive
+     * antes do manifesto, que ja reflete o estado consistente) e so e
+     * commitado DEPOIS de escrever o TAG_FINAL (trailer). Qualquer falha
+     * no meio faz rollback protegido — nunca deixa a transacao aberta.
+     *
+     * @return array{tables: array<string,int>, total_rows: int, bytes_written: int}
+     */
     public function run(): array {
-        $createdAt = ($this->clock)();
-        $migrationState = $this->summarizeMigrationState();
+        ($this->snapshotBegin)($this->db);
 
-        $this->writer->writeFrame(json_encode([
-            'type' => 'manifest',
-            'format_version' => BACKUP_ARTIFACT_VERSION,
-            'created_at' => $createdAt,
-            'application' => $this->backupContract['application'],
-            'schema_contract_sha256' => backup_schema_contract_hash($this->schemaContract),
-            'migration_state' => $migrationState,
-            'tables' => $this->backupContract['table_order'],
-        ], JSON_THROW_ON_ERROR));
+        try {
+            $createdAt = ($this->clock)();
+            $migrationState = $this->summarizeMigrationState();
 
-        $tableCounts = [];
-        $totalRows = 0;
-        $tableOrder = $this->backupContract['table_order'];
-        $lastIndex = count($tableOrder) - 1;
+            $this->writer->writeFrame(json_encode([
+                'type' => 'manifest',
+                'format_version' => BACKUP_ARTIFACT_VERSION,
+                'created_at' => $createdAt,
+                'application' => $this->backupContract['application'],
+                'schema_contract_sha256' => backup_schema_contract_hash($this->schemaContract),
+                'migration_state' => $migrationState,
+                'tables' => $this->backupContract['table_order'],
+            ], JSON_THROW_ON_ERROR));
 
-        foreach ($tableOrder as $index => $table) {
-            $spec = $this->backupContract['tables'][$table];
-            $count = $this->exportTable($table, $spec);
-            $tableCounts[$table] = $count;
-            $totalRows += $count;
+            $tableCounts = [];
+            $totalRows = 0;
+            $tableOrder = $this->backupContract['table_order'];
+            $lastIndex = count($tableOrder) - 1;
 
-            if ($index === $lastIndex) {
-                $this->writer->writeFrame(json_encode([
-                    'type' => 'trailer',
-                    'tables' => count($tableOrder),
-                    'total_rows' => $totalRows,
-                ], JSON_THROW_ON_ERROR), true);
+            foreach ($tableOrder as $index => $table) {
+                $spec = $this->backupContract['tables'][$table];
+                $count = $this->exportTable($table, $spec);
+                $tableCounts[$table] = $count;
+                $totalRows += $count;
+
+                if ($index === $lastIndex) {
+                    $this->writer->writeFrame(json_encode([
+                        'type' => 'trailer',
+                        'tables' => count($tableOrder),
+                        'total_rows' => $totalRows,
+                    ], JSON_THROW_ON_ERROR), true);
+                }
             }
+
+            ($this->snapshotCommit)($this->db);
+        } catch (Throwable $e) {
+            try {
+                ($this->snapshotRollback)($this->db);
+            } catch (Throwable) {
+                // Falha do rollback injetado nunca pode substituir a excecao original.
+            }
+            throw $e;
         }
 
         return [

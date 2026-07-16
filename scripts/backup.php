@@ -60,9 +60,10 @@ function backup_cli_format_success(array $report): string {
 
 /**
  * Executa o backup completo: resolve destino seguro, escreve no
- * temporario, so faz rename atomico pro destino final depois do
- * TAG_FINAL. Falha remove so o temporario. Retorna o relatorio de
- * metricas (sem dado de usuario).
+ * temporario, so substitui o destino final depois do TAG_FINAL (via
+ * backup_safe_replace(), que preserva o arquivo anterior se a
+ * substituicao falhar). Falha antes disso remove so o temporario.
+ * Retorna o relatorio de metricas (sem dado de usuario).
  */
 function backup_cli_run(PDO $db, array $backupContract, array $schemaContract, string $key, string $destPath, bool $force, string $repoRoot): array {
     [$finalPath, $tmpPath] = backup_resolve_destination($destPath, $repoRoot, $force);
@@ -87,9 +88,11 @@ function backup_cli_run(PDO $db, array $backupContract, array $schemaContract, s
         fclose($handle);
         $handle = null;
 
-        if (!rename($tmpPath, $finalPath)) {
-            throw new BackupCryptoException('could not finalize the backup file');
-        }
+        // rename() nao sobrescreve um destino existente em algumas
+        // versoes/condicoes do Windows — backup_safe_replace() preserva o
+        // backup anterior se a substituicao final falhar, em vez de so
+        // tentar um unico rename() cru.
+        backup_safe_replace($tmpPath, $finalPath, $force);
     } catch (Throwable $e) {
         if ($handle !== null) {
             fclose($handle);
