@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Archivo Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* Orby Custom Design System Palette */
+  --color-surface: #101415;
+  --color-surface-dim: #101415;
+  --color-surface-bright: #363a3b;
+  --color-surface-container-lowest: #0b0f10;
+  --color-surface-container-low: #191c1e;
+  --color-surface-container: #1d2022;
+  --color-surface-container-high: #272a2c;
+  --color-surface-container-highest: #323537;
+  --color-on-surface: #e0e3e5;
+  --color-on-surface-variant: #c2c6d5;
+  --color-inverse-surface: #e0e3e5;
+  --color-inverse-on-surface: #2d3133;
+  --color-outline: #8c909f;
+  --color-outline-variant: #424753;
+  --color-surface-tint: #adc6ff;
+  
+  --color-primary: #adc6ff;
+  --color-on-primary: #002e69;
+  --color-primary-container: #518efa;
+  --color-on-primary-container: #00285c;
+  --color-inverse-primary: #005ac1;
+  
+  --color-secondary: #d0bcff;
+  --color-on-secondary: #3c0091;
+  --color-secondary-container: #571bc1;
+  --color-on-secondary-container: #c4abff;
+  
+  --color-tertiary: #4edea3;
+  --color-on-tertiary: #003824;
+  --color-tertiary-container: #00a572;
+  --color-on-tertiary-container: #00311f;
+  
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+  
+  --color-primary-fixed: #d8e2ff;
+  --color-primary-fixed-dim: #adc6ff;
+  --color-on-primary-fixed: #001a41;
+  --color-on-primary-fixed-variant: #004494;
+  
+  --color-secondary-fixed: #e9ddff;
+  --color-secondary-fixed-dim: #d0bcff;
+  --color-on-secondary-fixed: #23005c;
+  --color-on-secondary-fixed-variant: #5516be;
+  
+  --color-tertiary-fixed: #6ffbbe;
+  --color-tertiary-fixed-dim: #4edea3;
+  --color-on-tertiary-fixed: #002113;
+  --color-on-tertiary-fixed-variant: #005236;
+  
+  --color-background: #101415;
+  --color-on-background: #e0e3e5;
+  --color-surface-variant: #323537;
+}
+
+@layer utilities {
+  .glass-card {
+    background: rgba(16, 20, 21, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid #424753;
+  }
+  
+  .card-base {
+    background-color: #131318;
+    border: 1px solid #24242D;
+    border-radius: 16px;
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .card-base:hover {
+    border-color: #518efa;
+    box-shadow: 0 0 16px rgba(81, 142, 250, 0.1);
+  }
+  
+  .primary-btn {
+    background: linear-gradient(135deg, #adc6ff 0%, #d0bcff 100%);
+    color: #002e69;
+    font-weight: 700;
+    transition: transform 0.15s ease, filter 0.2s ease;
+  }
+  
+  .primary-btn:active {
+    transform: scale(0.98);
+  }
+  
+  .text-glow-primary {
+    text-shadow: 0 0 12px rgba(173, 198, 255, 0.3);
+  }
+
+  .text-glow-tertiary {
+    text-shadow: 0 0 12px rgba(78, 222, 163, 0.3);
+  }
+  
+  .progress-ring-circle {
+    transition: stroke-dashoffset 0.35s;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+  }
+
+  .input-glow:focus-within {
+    box-shadow: 0 0 12px 0px rgba(173, 198, 255, 0.15);
+    border-color: #adc6ff;
+  }
+
+  .success-glow {
+    box-shadow: 0 0 30px rgba(0, 165, 114, 0.2);
+  }
+
+  .tech-bg {
+    background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+/* Material Symbols configuration */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+body {
+  font-family: "Archivo Narrow", sans-serif;
+  background-color: #050507;
+  color: #e0e3e5;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #050507;
+}
+::-webkit-scrollbar-thumb {
+  background: #24242D;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #323537;
+}
+
