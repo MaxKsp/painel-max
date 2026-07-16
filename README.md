@@ -1,153 +1,244 @@
-<h1 align="center">🔷 Orby</h1>
+# Orby
 
-<p align="center">
-  <b>Rotina e finanças pessoais em um único painel.</b>
-</p>
+**Rotina, financas pessoais e organizacao diaria em um painel self-hosted.**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/PHP-777BB4?style=flat&logo=php&logoColor=white" />
-  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=mysql&logoColor=white" />
-  <img src="https://img.shields.io/badge/Vanilla_JS-F7DF1E?style=flat&logo=javascript&logoColor=black" />
-  <img src="https://img.shields.io/badge/PWA-5A0FC8?style=flat&logo=pwa&logoColor=white" />
-  <img src="https://img.shields.io/badge/2FA-TOTP-informational?style=flat" />
-  <img src="https://img.shields.io/badge/Self--Hosted-000000?style=flat&logo=hostinger&logoColor=white" />
-</p>
+Orby e um projeto web feito para centralizar vida financeira, agenda, treinos e preferencias pessoais em uma unica aplicacao. A proposta e ter uma ferramenta pratica para uso real no dia a dia, mas tambem com base tecnica solida: autenticacao, 2FA, multiusuario, API em PHP, banco MySQL, PWA, testes automatizados e rotinas de backup criptografado.
 
----
+> Projeto pessoal mantido por [Max Keller](https://github.com/MaxKsp).
 
-O Orby junta duas coisas que normalmente vivem em apps separados: a agenda da sua rotina diária e o controle do seu dinheiro. A proposta é abrir uma tela só de manhã e saber o que fazer e como está o caixa — sem planilha, sem três assinaturas diferentes.
+## Visao Geral
 
-Construído de propósito para rodar em **hospedagem compartilhada comum** (PHP + MySQL): sem framework, sem etapa de build, sem dependência de serviços pagos. Um front-end vanilla e uma API PHP enxuta.
+O Orby nasceu para resolver um problema simples: acompanhar dinheiro, rotina e metas sem depender de varias planilhas ou aplicativos separados.
 
----
+Hoje o projeto combina:
 
-## ✨ Funcionalidades
+- controle financeiro pessoal;
+- agenda e rotina diaria;
+- acompanhamento de treinos e medidas;
+- area de perfil, preferencias e temas;
+- autenticacao com senha, Google e 2FA;
+- backup e restauracao criptografados;
+- base preparada para evoluir como produto SaaS self-hosted.
 
-**📅 Agenda**
-- Rotina semanal com horários e categorias (treino, trabalho, estudo...)
-- Checklist do dia, sequência de dias cumpridos e taxa de conclusão
-- Mapa de calor de conclusão e gráficos dos últimos 30 dias
-- Alarme de tarefa com notificação do navegador
+## Principais Recursos
 
-**💰 Financeiro — experiência de app de banco**
-- Visão consolidada: patrimônio líquido, saldo total, fatura dos cartões e crédito disponível
-- Detalhe de conta/cartão estilo extrato: duas colunas (saldo/cheque especial · fatura/disponível), status da fatura (aberta/fechada), vencimento e melhor dia de compra, e ações rápidas
-- Catálogo de ~87 bancos com logo, busca e até 11 favoritos editáveis
-- Cheque especial por conta (limite, saldo negativo e alerta de uso)
-- Cofrinhos / metas de guardar dinheiro dentro da conta (estilo Caixinhas)
-- Transferência entre contas e pagamento de fatura de cartão com uma conta
-- Projeção de saldo do fim do mês e lembrete de vencimento de fatura
-- Conciliação por extrato bancário (OFX) com marcação de duplicados
-- Despesas avulsas e recorrentes movimentando conta/cartão, com estorno
-- Rendas fixas, temporárias e variáveis, com dia de pagamento e conta de recebimento
-- Metas por categoria, alerta de gasto fora do padrão e relatório anual (IR) em PDF
-- Gráficos por banco, categoria e forma de pagamento (dia / semana / mês / ano) e mapa de calor de gastos
-- Contas vistas por conta ou agrupadas por banco
+### Financeiro
 
-**🏋️ Treinos**
-- Treinos-modelo com exercícios (séries × reps) e assistente que gera a divisão pelo objetivo
-- Treino do dia com checklist, carga por exercício e histórico de progressão
-- Sequência de dias treinados e mapa de calor do mês
-- Medidas corporais, peso, IMC com classificação e gráfico de evolução
+- Visao consolidada de saldo, patrimonio, faturas e credito disponivel.
+- Cadastro de contas, cartoes, bancos, receitas e despesas.
+- Despesas avulsas, recorrentes e parceladas.
+- Transferencia entre contas e pagamento de fatura.
+- Cofrinhos/metas por conta.
+- Cheque especial, limite de cartao, vencimento e melhor dia de compra.
+- Importacao e conciliacao por OFX.
+- Relatorios, graficos, mapa de calor e resumo anual para IR.
+- Busca, filtros e agrupamento por conta/banco/categoria.
 
-**🔐 Plataforma**
-- Multiusuário: cadastro com e-mail, dados totalmente isolados por conta
-- Verificação em duas etapas (TOTP) com QR code e códigos de backup
-- Login com Google (OAuth 2.0)
-- Temas de cor e preferências sincronizadas entre dispositivos
-- PWA instalável no celular
-- Backup e restauração completos em JSON
-- Aviso de tarefa por e-mail via cron, para quando o app está fechado
+### Rotina
 
----
+- Agenda semanal.
+- Checklist diario.
+- Sequencia de dias concluidos.
+- Graficos de progresso.
+- Notificacoes e lembretes.
 
-## 🧱 Stack
+### Treinos
 
-| Camada | Escolha |
+- Cadastro de treinos e exercicios.
+- Checklist do treino do dia.
+- Registro de carga e progresso.
+- Medidas corporais, peso e IMC.
+
+### Plataforma
+
+- Multiusuario com isolamento de dados.
+- Login com senha e Google OAuth.
+- 2FA com TOTP e codigos de backup.
+- Protecao CSRF.
+- Rate limit em pontos sensiveis.
+- PWA instalavel.
+- Preferencias sincronizadas por usuario.
+- Deploy automatizado via GitHub Actions.
+
+## Backup e Restauracao Criptografados
+
+O Orby possui uma rotina de backup e restore pensada para operacao segura.
+
+O artefato de backup usa:
+
+- magic/versionamento de container;
+- criptografia com `libsodium secretstream`;
+- chave obrigatoria via variavel de ambiente `ORBY_BACKUP_KEY`;
+- contrato de tabelas persistentes e efemeras;
+- validacao do schema antes de gerar/restaurar;
+- restore em duas passagens: validacao do artefato e restauracao transacional;
+- protecao contra restaurar no banco da aplicacao por engano;
+- teste automatizado cobrindo corrupcao, chave errada, rollback e isolamento.
+
+Arquivos principais:
+
+- `app/Core/BackupCrypto.php`
+- `app/Core/DatabaseBackup.php`
+- `app/Core/DatabaseRestore.php`
+- `config/backup-contract.php`
+- `config/schema-contract.php`
+- `scripts/backup.php`
+- `scripts/restore.php`
+- `tests/cases/backup_recovery_test.php`
+
+## Stack
+
+| Camada | Tecnologia |
 |---|---|
-| Front-end | Vanilla JS + Chart.js (CDN), arquivo único |
-| Back-end | PHP 8 + MySQL, PDO com prepared statements |
-| Auth | Sessão PHP, bcrypt, TOTP (RFC 6238) implementado sem libs |
-| Infra | Hospedagem compartilhada (Hostinger), deploy via GitHub Actions + FTPS |
+| Front-end | HTML, CSS, JavaScript vanilla |
+| Graficos | Chart.js |
+| Back-end | PHP 8+ |
+| Banco | MySQL |
+| Auth | Sessao PHP, bcrypt, TOTP |
+| PWA | Manifest + Service Worker |
+| Deploy | GitHub Actions + FTPS |
+| Testes | Testes PHP e JavaScript sem framework pesado |
+| Backup | PHP + libsodium |
 
-**Decisões de segurança:** CSRF token em todo POST, rate-limit de login/2FA/cadastro por IP, CSP + HSTS + headers de proteção via `.htaccess`, `config.php` fora do versionamento, gzip e cache de assets.
+## Estrutura do Projeto
 
-**Performance:** o front-end carrega todos os dados do usuário em uma única requisição no login e mantém cache em memória — navegar entre abas não toca a rede.
+```text
+.
+|-- api/                    Endpoints da aplicacao
+|-- app/Core/               Componentes centrais reutilizaveis
+|-- assets/                 CSS, JS e imagens
+|-- automation/             Arquivos auxiliares de automacao
+|-- config/                 Contratos de backup/schema
+|-- docs/                   Documentacao tecnica e relatorios
+|-- migrations/             Migracoes de banco
+|-- scripts/                Scripts operacionais
+|-- tests/                  Testes automatizados
+|-- index.php               Aplicacao principal
+|-- auth.php                Sessao, CSRF, login e 2FA
+|-- db.php                  Conexao PDO
+|-- finance.php             Regras do modulo financeiro
+|-- schema.sql              Schema inicial
+|-- config.example.php      Exemplo de configuracao local
+```
 
----
+## Rodando Localmente
 
-## 🚀 Rodando localmente
+Requisitos:
 
-Requer PHP 8.x com `pdo_mysql` e um MySQL acessível.
+- PHP 8+
+- MySQL
+- extensoes PHP: `pdo_mysql`, `mbstring`, `json`
+- para backup criptografado: `sodium`
+
+Passos:
 
 ```bash
-cp config.example.php config.php   # credenciais do seu MySQL local
-# rode schema.sql no banco (e os ALTERs comentados, se estiver atualizando)
+cp config.example.php config.php
 php -S localhost:8080
 ```
 
-Abra `http://localhost:8080` e crie uma conta em "Criar conta".
+Depois:
 
----
+1. Crie um banco MySQL.
+2. Rode o `schema.sql`.
+3. Ajuste as credenciais em `config.php`.
+4. Acesse `http://localhost:8080`.
 
-## 📦 Deploy
+## Variaveis de Backup
 
-O workflow [.github/workflows/deploy.yml](.github/workflows/deploy.yml) publica o repositório no `public_html` via FTPS a cada push na `master`. Secrets necessários (Settings → Secrets and variables → Actions):
+O backup criptografado nao usa senha do banco como chave. Defina uma chave propria:
 
-| Secret | Valor |
+```bash
+php -r "echo base64_encode(random_bytes(SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES)), PHP_EOL;"
+```
+
+Variaveis esperadas:
+
+| Variavel | Uso |
 |---|---|
-| `FTP_SERVER` | host FTP da hospedagem |
-| `FTP_USERNAME` | usuário FTP |
+| `ORBY_BACKUP_KEY` | chave base64 de 32 bytes para criptografar/decriptar backups |
+| `ORBY_RESTORE_DB_HOST` | host do banco isolado de restauracao |
+| `ORBY_RESTORE_DB_NAME` | nome do banco isolado de restauracao |
+| `ORBY_RESTORE_DB_USER` | usuario do banco de restauracao |
+| `ORBY_RESTORE_DB_PASS` | senha do banco de restauracao |
+| `ORBY_RESTORE_CONFIRM_NAME` | confirmacao exata do banco alvo |
+
+## Testes
+
+Rodar a suite PHP:
+
+```bash
+php tests/run.php
+```
+
+Validar sintaxe dos arquivos PHP:
+
+```bash
+php -l arquivo.php
+```
+
+O workflow `.github/workflows/tests.yml` roda validacoes de PHP e JavaScript nos PRs.
+
+## Deploy
+
+O deploy e feito por GitHub Actions via FTPS para hospedagem compartilhada.
+
+Secrets esperados:
+
+| Secret | Descricao |
+|---|---|
+| `FTP_SERVER` | servidor FTP/FTPS |
+| `FTP_USERNAME` | usuario FTP |
 | `FTP_PASSWORD` | senha FTP |
-| `FTP_SERVER_DIR` | normalmente `/public_html/` |
+| `FTP_SERVER_DIR` | diretorio remoto, geralmente `/public_html/` |
 
-Configuração única no servidor (nunca versionada nem sobrescrita pelo deploy):
+O arquivo `config.php` nao deve ser versionado. Ele precisa ser criado diretamente no servidor a partir do `config.example.php`.
 
-1. Criar o banco e rodar `schema.sql` no phpMyAdmin
-2. Criar `config.php` a partir do `config.example.php`
-3. Ativar o SSL da hospedagem (o `.htaccess` força HTTPS)
+## Seguranca
 
-### Login com Google
+Pontos ja tratados ou em evolucao:
 
-Crie um OAuth Client ID (tipo Web) no [Google Cloud Console](https://console.cloud.google.com/), com redirect `https://SEU-DOMINIO/auth-google-callback.php`, e preencha `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` no `config.php`. Se o domínio mudar, atualize o redirect no Google Cloud também.
+- senha com hash seguro;
+- CSRF nos formularios e chamadas sensiveis;
+- 2FA por TOTP;
+- codigos de backup para 2FA;
+- isolamento por usuario;
+- rate limit em fluxos sensiveis;
+- headers de seguranca via `.htaccess`;
+- backup criptografado com chave fora do repositorio;
+- restore protegido contra alvo incorreto.
 
-### Aviso de tarefas por e-mail
+## Roadmap
 
-1. Gere um token: `php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"`
-2. Defina `CRON_SECRET` no `config.php`
-3. Crie um Cron Job a cada 10 minutos: `php /home/SEU_USUARIO/public_html/cron-notify.php SEU_TOKEN`
+O backlog e as proximas entregas ficam no [ROADMAP.md](ROADMAP.md).
 
-O usuário ativa/desativa o aviso em Perfil → Notificações.
+Linhas principais:
 
----
+- evoluir modulo financeiro como experiencia de banking app;
+- melhorar qualidade dos testes;
+- fortalecer trilha de auditoria;
+- amadurecer modelo de assinatura;
+- separar cada vez mais a arquitetura em modulos;
+- melhorar operacao, backup e deploy.
 
-## 🗂️ Estrutura
+## Contribuicao
 
-```
-index.php                 app inteiro (HTML + CSS + JS), atrás de login
-login.php / register.php  autenticação: senha, 2FA e Google
-auth.php                  sessão, CSRF, rate-limit, fluxo de 2FA
-totp.php                  TOTP (RFC 6238) em PHP puro, validado contra os
-                          vetores de teste da RFC
-api/data.php              chave-valor do usuário (bootstrap ?all=1)
-api/export|import.php     backup completo em JSON
-api/totp-*.php            ativar / confirmar / desativar 2FA
-api/me.php, api/prefs.php dados e preferências do usuário
-cron-notify.php           aviso de tarefas por e-mail (protegido por token)
-manifest.json, sw.js      PWA
-schema.sql                criação e migração das tabelas
-```
+Fluxo sugerido:
 
----
+1. Crie uma branch por mudanca.
+2. Abra PR contra `master`.
+3. Rode os testes antes do merge.
+4. Mantenha commits objetivos.
 
-## 🤝 Contribuindo
+Convencao usada:
 
-Uma branch `feature/...` por melhoria, PR contra a `master`. O backlog priorizado vive no [ROADMAP.md](ROADMAP.md).
+- `feat:` nova funcionalidade;
+- `fix:` correcao;
+- `sec:` seguranca;
+- `ci:` pipeline/automacao;
+- `docs:` documentacao;
+- `refactor:` reorganizacao sem mudar comportamento.
 
-Convenção de commits: `feat:`, `fix:`, `sec:`, `chore:`, `docs:`.
+## Autor
 
----
-
-<p align="center">
-  Feito por <a href="https://github.com/MaxKsp">Max Keller</a>
-</p>
+Feito por [Max Keller](https://github.com/MaxKsp).
