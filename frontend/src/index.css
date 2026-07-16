@@ -60,6 +60,11 @@
   --color-background: #101415;
   --color-on-background: #e0e3e5;
   --color-surface-variant: #323537;
+
+  /* Tokens auxiliares do design system */
+  --color-warning: #f4bd73;
+  --color-on-warning: #3d2c00;
+  --color-muted: #8f96a3;
 }
 
 @layer utilities {
