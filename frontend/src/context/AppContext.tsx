@@ -143,16 +143,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
 
-  // Load from local storage or defaults
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('orby_tasks');
-    return saved ? JSON.parse(saved) : DEFAULT_TASKS;
-  });
-
-  const [exercises, setExercises] = useState<Exercise[]>(() => {
-    const saved = localStorage.getItem('orby_exercises');
-    return saved ? JSON.parse(saved) : DEFAULT_EXERCISES;
-  });
+  // Estado legado mantido somente para simulações e testes. Dados reais do
+  // usuário são carregados e persistidos pelo BootstrapProvider.
+  const [tasks, setTasks] = useState<Task[]>(() => DEFAULT_TASKS.map((task) => ({ ...task })));
+  const [exercises, setExercises] = useState<Exercise[]>(() => DEFAULT_EXERCISES.map((exercise) => ({ ...exercise })));
 
   // Financial States
   const [balance, setBalance] = useState<number>(12450.80);
@@ -201,15 +195,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [blockedTime, setBlockedTime] = useState<number>(14 * 60 + 56);
   const [isWorkoutActive, setIsWorkoutActive] = useState<boolean>(false);
   const [workoutTimer, setWorkoutTimer] = useState<number>(1800);
-
-  // Save state on change
-  useEffect(() => {
-    localStorage.setItem('orby_tasks', JSON.stringify(tasks));
-  }, [tasks]);
-
-  useEffect(() => {
-    localStorage.setItem('orby_exercises', JSON.stringify(exercises));
-  }, [exercises]);
 
   // Handle countdown timer for blocked screen
   useEffect(() => {
