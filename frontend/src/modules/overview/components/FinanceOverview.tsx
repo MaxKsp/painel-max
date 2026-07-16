@@ -1,8 +1,7 @@
-import { Badge, Card, CardHeader, Icon, Sparkline, StatCard } from "@/design-system"
-import { formatCurrency, formatSignedCurrency } from "@/lib/format"
-import type { FinanceBootstrap } from "@/modules/finance/contracts"
-import { isCard } from "@/modules/finance/selectors"
-import { financeSummary } from "@/modules/finance/selectors"
+import { Badge, Icon, SectionCard, Sparkline, StatCard } from "../../../design-system"
+import { formatCurrency, formatSignedCurrency } from "../../../lib/format"
+import type { FinanceBootstrap } from "../../finance/contracts"
+import { financeSummary, isCard } from "../../finance/selectors"
 
 interface FinanceOverviewProps {
   data: FinanceBootstrap
@@ -18,7 +17,7 @@ export function FinanceOverview({ data, trend }: FinanceOverviewProps) {
       : 0
 
   return (
-    <section id="finance" aria-labelledby="finance-title" className="scroll-mt-20">
+    <section aria-labelledby="finance-title">
       <div className="mb-4 flex items-center justify-between">
         <h2 id="finance-title" className="text-lg font-semibold text-on-surface">
           Finanças
@@ -63,7 +62,7 @@ export function FinanceOverview({ data, trend }: FinanceOverviewProps) {
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
-        <Card hoverGlow={false} className="p-5">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-5">
           <div className="mb-4 flex items-start justify-between">
             <div>
               <p className="text-sm text-on-surface-variant">
@@ -73,7 +72,7 @@ export function FinanceOverview({ data, trend }: FinanceOverviewProps) {
                 {formatCurrency(summary.netWorth)}
               </p>
             </div>
-            <Badge tone={trendDelta >= 0 ? "positive" : "negative"}>
+            <Badge tone={trendDelta >= 0 ? "positive" : "warning"}>
               <Icon
                 name={trendDelta >= 0 ? "trending_up" : "trending_down"}
                 className="text-[16px]"
@@ -92,10 +91,9 @@ export function FinanceOverview({ data, trend }: FinanceOverviewProps) {
               <span key={t.month}>{t.month}</span>
             ))}
           </div>
-        </Card>
+        </div>
 
-        <Card hoverGlow={false} className="overflow-hidden">
-          <CardHeader title="Contas e cartões" />
+        <SectionCard title="Contas e cartões" bodyClassName="p-0">
           <ul className="divide-y divide-outline-variant">
             {data.accounts_v2.map((account) => {
               const card = isCard(account)
@@ -131,7 +129,7 @@ export function FinanceOverview({ data, trend }: FinanceOverviewProps) {
               )
             })}
           </ul>
-        </Card>
+        </SectionCard>
       </div>
     </section>
   )

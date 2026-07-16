@@ -1,10 +1,12 @@
+import type { ReactNode } from "react"
+
 interface ProgressRingProps {
   /** 0-100 */
   value: number
   size?: number
   strokeWidth?: number
   label?: string
-  children?: React.ReactNode
+  children?: ReactNode
 }
 
 export function ProgressRing({

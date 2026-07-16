@@ -1,6 +1,6 @@
-import { Card, CardHeader, Icon, ProgressRing } from "@/design-system"
-import type { Task } from "@/modules/routine/contracts"
-import { routineSummary } from "@/modules/routine/selectors"
+import { Icon, ProgressRing, SectionCard } from "../../../design-system"
+import type { Task } from "../../routine/contracts"
+import { routineSummary } from "../../routine/selectors"
 
 interface RoutineOverviewProps {
   tasks: Task[]
@@ -11,20 +11,19 @@ export function RoutineOverview({ tasks }: RoutineOverviewProps) {
   const upcoming = tasks.filter((t) => !t.completed).slice(0, 3)
 
   return (
-    <Card hoverGlow={false} className="flex flex-col overflow-hidden">
-      <CardHeader
-        title="Rotina de hoje"
-        description="Prioridades por horário"
-        action={
-          <a
-            href="#routine"
-            className="text-sm font-medium text-primary hover:text-on-surface"
-          >
-            Abrir
-          </a>
-        }
-      />
-
+    <SectionCard
+      title="Rotina de hoje"
+      description="Prioridades por horário"
+      bodyClassName="p-0"
+      action={
+        <a
+          href="#routine"
+          className="text-sm font-medium text-primary hover:text-on-surface"
+        >
+          Abrir
+        </a>
+      }
+    >
       <div className="flex items-center gap-5 px-5 py-5 sm:px-6">
         <ProgressRing value={summary.progress} size={104}>
           <span className="font-mono text-xl font-semibold text-on-surface">
@@ -74,6 +73,6 @@ export function RoutineOverview({ tasks }: RoutineOverviewProps) {
           )}
         </ul>
       </div>
-    </Card>
+    </SectionCard>
   )
 }

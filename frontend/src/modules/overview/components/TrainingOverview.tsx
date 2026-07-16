@@ -1,7 +1,7 @@
-import { Badge, Card, CardHeader, Icon, Sparkline } from "@/design-system"
-import { formatWeight } from "@/lib/format"
-import type { WeightRecord, WorkoutSession } from "@/modules/training/contracts"
-import { trainingSummary } from "@/modules/training/selectors"
+import { Badge, Icon, SectionCard, Sparkline } from "../../../design-system"
+import { formatWeight } from "../../../lib/format"
+import type { WeightRecord, WorkoutSession } from "../../training/contracts"
+import { trainingSummary } from "../../training/selectors"
 
 interface TrainingOverviewProps {
   workout: WorkoutSession
@@ -13,13 +13,12 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
   const weightValues = weights.map((w) => w.weight)
 
   return (
-    <Card hoverGlow={false} className="flex flex-col overflow-hidden">
-      <CardHeader
-        title="Treino de hoje"
-        description={summary.focus}
-        action={<Badge tone="primary">{summary.durationMin} min</Badge>}
-      />
-
+    <SectionCard
+      title="Treino de hoje"
+      description={summary.focus}
+      bodyClassName="p-0"
+      action={<Badge tone="primary">{summary.durationMin} min</Badge>}
+    >
       <div className="px-5 py-5 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
@@ -51,10 +50,7 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
 
         <ul className="mt-4 space-y-1.5">
           {workout.exercises.slice(0, 3).map((ex) => (
-            <li
-              key={ex.id}
-              className="flex items-center gap-2.5 text-sm"
-            >
+            <li key={ex.id} className="flex items-center gap-2.5 text-sm">
               <Icon
                 name={ex.completed ? "check_circle" : "radio_button_unchecked"}
                 filled={ex.completed}
@@ -102,6 +98,6 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
           />
         </div>
       </div>
-    </Card>
+    </SectionCard>
   )
 }

@@ -1,6 +1,6 @@
-import { Card, CardHeader, Icon } from "@/design-system"
-import { formatCurrency } from "@/lib/format"
-import type { Vault } from "@/modules/finance/contracts"
+import { Icon, SectionCard } from "../../../design-system"
+import { formatCurrency } from "../../../lib/format"
+import type { Vault } from "../../finance/contracts"
 
 interface VaultsOverviewProps {
   vaults: Vault[]
@@ -8,19 +8,19 @@ interface VaultsOverviewProps {
 
 export function VaultsOverview({ vaults }: VaultsOverviewProps) {
   return (
-    <Card hoverGlow={false} className="flex flex-col overflow-hidden">
-      <CardHeader
-        title="Cofrinhos"
-        description="Metas de reserva"
-        action={
-          <a
-            href="#finance"
-            className="text-sm font-medium text-primary hover:text-on-surface"
-          >
-            Gerenciar
-          </a>
-        }
-      />
+    <SectionCard
+      title="Cofrinhos"
+      description="Metas de reserva"
+      bodyClassName="p-0"
+      action={
+        <a
+          href="#finance"
+          className="text-sm font-medium text-primary hover:text-on-surface"
+        >
+          Gerenciar
+        </a>
+      }
+    >
       <ul className="flex flex-col gap-4 px-5 py-5 sm:px-6">
         {vaults.map((vault) => {
           const meta = vault.meta ?? 0
@@ -57,6 +57,6 @@ export function VaultsOverview({ vaults }: VaultsOverviewProps) {
           )
         })}
       </ul>
-    </Card>
+    </SectionCard>
   )
 }

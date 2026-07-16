@@ -4,9 +4,9 @@ import { Login } from './components/Auth/Login';
 import { Recuperar } from './components/Auth/Recuperar';
 import { TwoFactor } from './components/Auth/TwoFactor';
 import { Verificacao } from './components/Auth/Verificacao';
-import { Dashboard } from './components/Dashboard/Dashboard';
 import { ModalsContainer } from './components/Dashboard/ModalsContainer';
 import { TopNavBar } from './components/Dashboard/TopNavBar';
+import { OverviewScreen } from './modules/overview/OverviewScreen';
 import { Bloqueada } from './components/Simulation/Bloqueada';
 import { Expirada } from './components/Simulation/Expirada';
 import { Mapa } from './components/Simulation/Mapa';
@@ -37,9 +37,9 @@ const AppRouter = () => {
   if (currentScreen === 'mapa') return <Mapa />;
 
   return (
-    <div className="min-h-screen bg-background text-on-surface">
+    <div id="top" className="min-h-screen bg-background text-on-surface">
       <TopNavBar />
-      <Dashboard />
+      <OverviewScreen />
       <ModalsContainer />
       {isSearchOpen && (
         <div className="fixed inset-0 z-[120] bg-black/65 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={() => setIsSearchOpen(false)}>

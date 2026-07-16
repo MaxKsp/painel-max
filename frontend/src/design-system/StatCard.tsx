@@ -1,5 +1,5 @@
-import { cn } from "@/lib/cn"
-import { Icon } from "./icon"
+import { cn } from "../lib/cn"
+import { Icon } from "./Icon"
 
 type Dot = "primary" | "positive" | "warning" | "negative" | "none"
 
@@ -36,9 +36,7 @@ export function StatCard({
     >
       <div className="mb-5 flex items-center justify-between">
         <p className="flex items-center gap-2 text-sm text-on-surface-variant">
-          {icon ? (
-            <Icon name={icon} className="text-[18px] text-muted" />
-          ) : null}
+          {icon ? <Icon name={icon} className="text-[18px] text-muted" /> : null}
           {label}
         </p>
         {dot !== "none" ? (

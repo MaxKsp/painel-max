@@ -1,17 +1,18 @@
-import { cn } from "@/lib/cn"
+import type { ReactNode } from "react"
+import { cn } from "../lib/cn"
 
-type Tone = "neutral" | "primary" | "positive" | "warning" | "negative"
+type Tone = "neutral" | "primary" | "positive" | "warning" | "secondary"
 
 const TONES: Record<Tone, string> = {
-  neutral: "bg-surface-container-high text-on-surface-variant",
+  neutral: "bg-white/[0.06] text-on-surface-variant",
   primary: "bg-primary/15 text-primary",
   positive: "bg-tertiary/15 text-tertiary",
   warning: "bg-warning/15 text-warning",
-  negative: "bg-error/15 text-error",
+  secondary: "bg-secondary/15 text-secondary",
 }
 
 interface BadgeProps {
-  children: React.ReactNode
+  children: ReactNode
   tone?: Tone
   className?: string
 }

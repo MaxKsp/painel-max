@@ -1,5 +1,6 @@
-import { Button, Icon } from "@/design-system"
-import { formatLongDate } from "@/lib/format"
+import { Button } from "../../../components/ui/Button"
+import { Icon } from "../../../design-system"
+import { formatLongDate } from "../../../lib/format"
 
 interface OverviewHeaderProps {
   userName: string
@@ -28,11 +29,11 @@ export function OverviewHeader({
         </p>
       </div>
       <div className="flex gap-2">
-        <Button variant="secondary">
+        <Button variant="secondary" size="md">
           <Icon name="payments" className="text-[18px]" />
           Lançar despesa
         </Button>
-        <Button variant="primary">
+        <Button variant="primary" size="md">
           <Icon name="add" className="text-[18px]" />
           Nova tarefa
         </Button>

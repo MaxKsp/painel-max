@@ -1,7 +1,7 @@
 import { useApp } from '../../context/AppContext';
 
 export const TopNavBar = () => {
-  const { setIsSearchOpen, setIsExpenseModalOpen, isProfileMenuOpen, setIsProfileMenuOpen, setCurrentScreen } = useApp();
+  const { setIsSearchOpen, isProfileMenuOpen, setIsProfileMenuOpen, setCurrentScreen } = useApp();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07] bg-[#0c0d10]/90 backdrop-blur-xl">
@@ -14,10 +14,10 @@ export const TopNavBar = () => {
             <span className="text-lg font-semibold tracking-[-0.03em]">Orby</span>
           </button>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-            <button className="rounded-lg bg-white/[0.07] px-3 py-2 text-sm font-medium text-white">Visão geral</button>
-            <button onClick={() => setIsExpenseModalOpen(true)} className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Finanças</button>
-            <button className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Rotina</button>
-            <button className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Treinos</button>
+            <a href="#top" className="rounded-lg bg-white/[0.07] px-3 py-2 text-sm font-medium text-white">Visão geral</a>
+            <a href="#finance" className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Finanças</a>
+            <a href="#routine" className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Rotina</a>
+            <a href="#training" className="rounded-lg px-3 py-2 text-sm font-medium text-[#969ca8] hover:bg-white/[0.04] hover:text-white">Treinos</a>
           </nav>
         </div>
         <div className="flex items-center gap-2">
