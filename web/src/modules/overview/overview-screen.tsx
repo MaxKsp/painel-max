@@ -31,9 +31,17 @@ export function OverviewScreen() {
         />
 
         <div className="flex flex-col gap-8">
-          <FinanceOverview
-            data={financeBootstrapMock}
-            trend={netWorthTrendMock}
+          <section id="finance" className="scroll-mt-20">
+            <FinanceOverview
+              data={financeBootstrapMock}
+              trend={netWorthTrendMock}
+            />
+          </section>
+
+          <section
+            id="training"
+            aria-hidden="true"
+            className="sr-only scroll-mt-20"
           />
 
           <section
