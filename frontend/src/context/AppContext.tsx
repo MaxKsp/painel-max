@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
+import { useProgress } from '../modules/progress/store';
+import { hasRoutineBackend, loadTasks, saveTasks } from '../modules/routine/api';
 
 // ============================================================================
 // TYPES
@@ -10,14 +12,10 @@ export interface Task {
   title: string;
   subtitle: string;
   completed: boolean;
-}
-
-export interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  category: string;
-  date: string;
+  date?: string;
+  priority?: 'alta' | 'media' | 'baixa';
+  category?: string;
+  durationMin?: number;
 }
 
 export interface Exercise {
@@ -33,27 +31,14 @@ export interface WeightRecord {
 }
 
 interface AppContextType {
-  // Navigation
-  currentScreen: string;
-  setCurrentScreen: (screen: string) => void;
-
   // Global State
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  refreshTasks: () => Promise<void>;
   exercises: Exercise[];
   setExercises: React.Dispatch<React.SetStateAction<Exercise[]>>;
   
-  // Finances
-  balance: number;
-  setBalance: React.Dispatch<React.SetStateAction<number>>;
-  invoice: number;
-  setInvoice: React.Dispatch<React.SetStateAction<number>>;
-  projection: number;
-  setProjection: React.Dispatch<React.SetStateAction<number>>;
-
   // Alerts & Modals
-  isAlertVisible: boolean;
-  setIsAlertVisible: (visible: boolean) => void;
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
   searchQuery: string;
@@ -82,27 +67,12 @@ interface AppContextType {
   setExpenseDesc: (desc: string) => void;
   expenseAmount: string;
   setExpenseAmount: (amount: string) => void;
-  expenseType: 'invoice' | 'sub_balance';
-  setExpenseType: (type: 'invoice' | 'sub_balance') => void;
-
   weightValue: string;
   setWeightValue: (weight: string) => void;
   loggedWeights: WeightRecord[];
   setLoggedWeights: React.Dispatch<React.SetStateAction<WeightRecord[]>>;
 
-  // Registration strength checks
-  registerPassword: string;
-  setRegisterPassword: (password: string) => void;
-  passwordChecks: {
-    minChar: boolean;
-    hasUpper: boolean;
-    hasNumber: boolean;
-    hasSpecial: boolean;
-  };
-
   // Timers
-  blockedTime: number;
-  setBlockedTime: React.Dispatch<React.SetStateAction<number>>;
   isWorkoutActive: boolean;
   setIsWorkoutActive: (active: boolean) => void;
   workoutTimer: number;
@@ -111,18 +81,15 @@ interface AppContextType {
   // Handlers
   handleToggleTask: (id: string) => void;
   handleAddTaskSubmit: (e: React.FormEvent) => void;
-  handlePayAlertBill: () => void;
-  handleAddExpenseSubmit: (e: React.FormEvent) => void;
   handleAddWeightSubmit: (e: React.FormEvent) => void;
   handleToggleExercise: (id: string) => void;
-  handleResetSimulation: () => void;
 }
 
 const DEFAULT_TASKS: Task[] = [
   { id: '1', time: '07:00', title: 'Meditação Matinal', subtitle: 'Mental health session', completed: true },
   { id: '2', time: '08:30', title: 'Treino de Cardio', subtitle: 'Corrida leve na esteira', completed: true },
   { id: '3', time: '10:00', title: 'Planejamento Semanal', subtitle: 'Metas do time', completed: true },
-  { id: '4', time: '14:00', title: 'Reunião de Alinhamento', subtitle: 'Videochamada', completed: false },
+  { id: '4', time: '14:00', title: 'Reunião de alinhamento', subtitle: 'Videochamada', completed: false },
   { id: '5', time: '16:30', title: 'Revisão de Código', subtitle: 'GitHub Pull Requests', completed: false },
   { id: '6', time: '17:30', title: 'Lanche da Tarde', subtitle: 'Shake proteico', completed: true },
   { id: '7', time: '18:00', title: 'Comprar Suplementos', subtitle: 'Farmácia central', completed: true },
@@ -141,26 +108,21 @@ const DEFAULT_EXERCISES: Exercise[] = [
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
-
+  const { awardEvent } = useProgress();
+  const remoteTasks = hasRoutineBackend();
+  const tasksReady = useRef(!remoteTasks);
   // Load from local storage or defaults
   const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('orby_tasks');
+    const saved = localStorage.getItem('level-os:tasks');
     return saved ? JSON.parse(saved) : DEFAULT_TASKS;
   });
 
   const [exercises, setExercises] = useState<Exercise[]>(() => {
-    const saved = localStorage.getItem('orby_exercises');
+    const saved = localStorage.getItem('level-os:exercises');
     return saved ? JSON.parse(saved) : DEFAULT_EXERCISES;
   });
 
-  // Financial States
-  const [balance, setBalance] = useState<number>(12450.80);
-  const [invoice, setInvoice] = useState<number>(2120.45);
-  const [projection, setProjection] = useState<number>(4890.12);
-
   // Alert & Search
-  const [isAlertVisible, setIsAlertVisible] = useState<boolean>(true);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -178,7 +140,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseType, setExpenseType] = useState<'invoice' | 'sub_balance'>('invoice');
 
   const [weightValue, setWeightValue] = useState('80.0');
   const [loggedWeights, setLoggedWeights] = useState<WeightRecord[]>([
@@ -188,41 +149,30 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     { date: '15/07', weight: 80.2 },
   ]);
 
-  // Auth Checklist
-  const [registerPassword, setRegisterPassword] = useState('');
-  const [passwordChecks, setPasswordChecks] = useState({
-    minChar: false,
-    hasUpper: false,
-    hasNumber: false,
-    hasSpecial: false,
-  });
-
   // Timers
-  const [blockedTime, setBlockedTime] = useState<number>(14 * 60 + 56);
   const [isWorkoutActive, setIsWorkoutActive] = useState<boolean>(false);
   const [workoutTimer, setWorkoutTimer] = useState<number>(1800);
 
+  const refreshTasks = useCallback(async () => {
+    if (!remoteTasks) return;
+    const next = await loadTasks();
+    tasksReady.current = true;
+    setTasks(next);
+  }, [remoteTasks]);
+
+  useEffect(() => { void refreshTasks().catch(() => { tasksReady.current = false; }); }, [refreshTasks]);
+
   // Save state on change
   useEffect(() => {
-    localStorage.setItem('orby_tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    if (!remoteTasks) { localStorage.setItem('level-os:tasks', JSON.stringify(tasks)); return; }
+    if (!tasksReady.current) return;
+    const timer = window.setTimeout(() => { void saveTasks(tasks); }, 450);
+    return () => window.clearTimeout(timer);
+  }, [remoteTasks, tasks]);
 
   useEffect(() => {
-    localStorage.setItem('orby_exercises', JSON.stringify(exercises));
+    localStorage.setItem('level-os:exercises', JSON.stringify(exercises));
   }, [exercises]);
-
-  // Handle countdown timer for blocked screen
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (currentScreen === 'bloqueada') {
-      interval = setInterval(() => {
-        setBlockedTime((prev) => (prev > 0 ? prev - 1 : 14 * 60 + 56));
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [currentScreen]);
 
   // Active workout timer tick
   useEffect(() => {
@@ -237,18 +187,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, [isWorkoutActive, isWorkoutModalOpen]);
 
-  // Password Strength Check
-  useEffect(() => {
-    setPasswordChecks({
-      minChar: registerPassword.length >= 8,
-      hasUpper: /[A-Z]/.test(registerPassword),
-      hasNumber: /[0-9]/.test(registerPassword),
-      hasSpecial: /[^A-Za-z0-9]/.test(registerPassword),
-    });
-  }, [registerPassword]);
-
   // Handlers
   const handleToggleTask = (id: string) => {
+    const target = tasks.find((task) => task.id === id);
     setTasks(
       tasks.map((task) => {
         if (task.id === id) {
@@ -257,6 +198,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return task;
       })
     );
+    if (target && !target.completed) {
+      const date = target.date ?? new Date().toLocaleDateString('sv-SE');
+      const safeId = target.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+      void awardEvent('rotina', `rotina:${date}:${safeId}`);
+    }
   };
 
   const handleAddTaskSubmit = (e: React.FormEvent) => {
@@ -273,30 +219,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setNewTaskTitle('');
     setNewTaskSubtitle('');
     setIsTaskModalOpen(false);
-  };
-
-  const handlePayAlertBill = () => {
-    setBalance((prev) => prev - 342.10);
-    setProjection((prev) => prev - 342.10);
-    setIsAlertVisible(false);
-  };
-
-  const handleAddExpenseSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedAmount = parseFloat(expenseAmount);
-    if (!expenseDesc.trim() || isNaN(parsedAmount) || parsedAmount <= 0) return;
-
-    if (expenseType === 'invoice') {
-      setInvoice((prev) => prev + parsedAmount);
-      setProjection((prev) => prev - parsedAmount);
-    } else {
-      setBalance((prev) => prev - parsedAmount);
-      setProjection((prev) => prev - parsedAmount);
-    }
-
-    setExpenseDesc('');
-    setExpenseAmount('');
-    setIsExpenseModalOpen(false);
   };
 
   const handleAddWeightSubmit = (e: React.FormEvent) => {
@@ -320,39 +242,14 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  const handleResetSimulation = () => {
-    setTasks(DEFAULT_TASKS);
-    setExercises(DEFAULT_EXERCISES);
-    setBalance(12450.80);
-    setInvoice(2120.45);
-    setProjection(4890.12);
-    setIsAlertVisible(true);
-    setBlockedTime(14 * 60 + 56);
-    setLoggedWeights([
-      { date: '12/07', weight: 81.2 },
-      { date: '13/07', weight: 80.9 },
-      { date: '14/07', weight: 80.5 },
-      { date: '15/07', weight: 80.2 },
-    ]);
-  };
-
   return (
     <AppContext.Provider
       value={{
-        currentScreen,
-        setCurrentScreen,
         tasks,
         setTasks,
+        refreshTasks,
         exercises,
         setExercises,
-        balance,
-        setBalance,
-        invoice,
-        setInvoice,
-        projection,
-        setProjection,
-        isAlertVisible,
-        setIsAlertVisible,
         isSearchOpen,
         setIsSearchOpen,
         searchQuery,
@@ -377,28 +274,18 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setExpenseDesc,
         expenseAmount,
         setExpenseAmount,
-        expenseType,
-        setExpenseType,
         weightValue,
         setWeightValue,
         loggedWeights,
         setLoggedWeights,
-        registerPassword,
-        setRegisterPassword,
-        passwordChecks,
-        blockedTime,
-        setBlockedTime,
         isWorkoutActive,
         setIsWorkoutActive,
         workoutTimer,
         setWorkoutTimer,
         handleToggleTask,
         handleAddTaskSubmit,
-        handlePayAlertBill,
-        handleAddExpenseSubmit,
         handleAddWeightSubmit,
         handleToggleExercise,
-        handleResetSimulation,
       }}
     >
       {children}

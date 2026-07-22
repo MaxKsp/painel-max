@@ -21,9 +21,5 @@ function finance_data_bootstrap(PDO $db, int $uid): array {
         error_log('migrate: ' . $e->getMessage());
     }
 
-    $out = [];
-    foreach (FINANCE_SETS as $kvKey => $set) {
-        $out[$kvKey] = finance_load_set($db, $uid, $set);
-    }
-    return $out;
+    return finance_load_all_sets($db, $uid);
 }

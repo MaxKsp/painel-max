@@ -55,7 +55,7 @@ return function (): void {
     ]));
     test_assert_same(500, $failResult['status'], 'A save failure must return 500.');
     test_assert_same(
-        ['error' => 'erro ao salvar — banco atualizado? (ver migrations)'],
+        ['error' => 'Não foi possível salvar os dados financeiros.'],
         $failResult['body'],
         'A save failure must return the current error message.'
     );

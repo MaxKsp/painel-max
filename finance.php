@@ -14,6 +14,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app/Modules/Progress/ProgressService.php';
 require_once __DIR__ . '/app/Modules/Finance/FinanceRead.php';
 require_once __DIR__ . '/app/Modules/Finance/FinanceWrite.php';
 require_once __DIR__ . '/app/Modules/Finance/FinanceMigration.php';

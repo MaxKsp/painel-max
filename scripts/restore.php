@@ -87,13 +87,17 @@ function restore_cli_main(array $argv): int {
         require_once $repoRoot . '/config.php';
         $appDbName = defined('DB_NAME') ? (string)DB_NAME : '';
 
-        $targetDbName = (string)(getenv('ORBY_RESTORE_DB_NAME') ?: '');
-        $confirmName = (string)(getenv('ORBY_RESTORE_CONFIRM_NAME') ?: '');
+        // Nomes novos LEVELOS_*; os legados ORBY_* seguem aceitos até o rename no servidor.
+        $restoreEnv = static fn(string $suffix): string =>
+            (string)(getenv('LEVELOS_RESTORE_' . $suffix) ?: getenv('ORBY_RESTORE_' . $suffix) ?: '');
+
+        $targetDbName = $restoreEnv('DB_NAME');
+        $confirmName = $restoreEnv('CONFIRM_NAME');
         database_restore_check_target_name($appDbName, $targetDbName, $confirmName);
 
-        $targetHost = (string)(getenv('ORBY_RESTORE_DB_HOST') ?: '');
-        $targetUser = (string)(getenv('ORBY_RESTORE_DB_USER') ?: '');
-        $targetPass = (string)(getenv('ORBY_RESTORE_DB_PASS') ?: '');
+        $targetHost = $restoreEnv('DB_HOST');
+        $targetUser = $restoreEnv('DB_USER');
+        $targetPass = $restoreEnv('DB_PASS');
         if ($targetHost === '' || $targetUser === '') {
             throw new InvalidArgumentException('restore target connection is not fully configured');
         }

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../finance.php';
+require_once __DIR__ . '/../plan.php';
 require_once __DIR__ . '/../app/Modules/Finance/FinanceDataBootstrap.php';
 require_once __DIR__ . '/../app/Modules/Finance/FinanceAuxiliaryKv.php';
 
@@ -17,19 +18,30 @@ if ($method === 'GET') {
     // requisições paralelas do mesmo usuário.
     session_write_close();
     if (isset($_GET['all'])) {
-        // migra kv->tabelas uma vez, entao serve financeiro das tabelas
-        $financeData = finance_data_bootstrap($db, $uid);
-        $stmt = $db->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%'");
-        $stmt->execute([$uid]);
-        $out = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $out[$row['data_key']] = json_decode($row['data_value']);
+        try {
+            // Duas queries fixas no financeiro; KV também é carregado em lote.
+            $financeData = finance_data_bootstrap($db, $uid);
+            $stmt = $db->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%' ORDER BY data_key LIMIT 501");
+            $stmt->execute([$uid]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (count($rows) > 500) throw new OverflowException('User data key limit exceeded.');
+            $out = [];
+            $payloadBytes = 0;
+            foreach ($rows as $row) {
+                $payloadBytes += strlen((string)$row['data_value']);
+                if ($payloadBytes > 2 * 1024 * 1024) throw new OverflowException('User data payload limit exceeded.');
+                $out[$row['data_key']] = json_decode((string)$row['data_value'], false, 512, JSON_THROW_ON_ERROR);
+            }
+            foreach ($financeData as $kvKey => $value) $out[$kvKey] = $value;
+            echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        } catch (OverflowException) {
+            http_response_code(413);
+            echo json_encode(['error' => 'data_too_large']);
+        } catch (Throwable $e) {
+            error_log('data bootstrap failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'data_unavailable']);
         }
-        // fonte de verdade do financeiro = tabelas (sobrescreve o kv antigo)
-        foreach ($financeData as $kvKey => $value) {
-            $out[$kvKey] = $value;
-        }
-        echo json_encode($out);
         exit;
     }
 
@@ -48,6 +60,7 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     require_csrf();
+    require_plan($uid, 'individual');
     $raw = file_get_contents('php://input', false, null, 0, 2 * 1024 * 1024 + 1);
     if (strlen($raw) > 2 * 1024 * 1024) {
         http_response_code(413);

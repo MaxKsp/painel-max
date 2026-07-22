@@ -6,6 +6,11 @@ require_once __DIR__ . '/../auth.php';
 header('Content-Type: application/json; charset=utf-8');
 $uid = require_login();
 require_rate_limit('avatar', 10, 60);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Método não permitido.']);
+    exit;
+}
 require_csrf();
 
 if (empty($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
@@ -77,5 +82,5 @@ echo json_encode(['ok' => true, 'avatar' => $path]);
 } catch (Throwable $e) {
     error_log('avatar.php: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'erro no servidor — o banco de dados está atualizado? (ver schema.sql)']);
+    echo json_encode(['error' => 'Não foi possível atualizar a foto.']);
 }

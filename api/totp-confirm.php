@@ -7,9 +7,20 @@ require_once __DIR__ . '/../totp.php';
 header('Content-Type: application/json; charset=utf-8');
 $uid = require_login();
 require_rate_limit('totp', 20, 60);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Método não permitido.']);
+    exit;
+}
 require_csrf();
 
-$body = json_decode(file_get_contents('php://input'), true);
+$raw = file_get_contents('php://input', false, null, 0, 4097);
+if (!is_string($raw) || strlen($raw) > 4096) {
+    http_response_code(413);
+    echo json_encode(['error' => 'Payload muito grande.']);
+    exit;
+}
+$body = json_decode($raw, true);
 $code = is_array($body) ? (string)($body['code'] ?? '') : '';
 
 $db = get_db();

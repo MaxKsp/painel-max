@@ -6,8 +6,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  quality-gate:
+    uses: ./.github/workflows/tests.yml
+
   deploy:
+    needs: quality-gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production
+    concurrency:
+      group: production-ftps
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,16 +24,13 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Instalar e validar frontend
+      - name: Instalar frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run lint
-          npm run test:run
+        run: npm ci
 
       - name: Gerar frontend para a raiz publica
         working-directory: frontend
@@ -42,13 +48,25 @@ jobs:
             **/.git*
             **/.git*/**
             **/.github/**
+            **/.agents/**
             **/.claude/**
+            **/.codex/**
+            **/.serena/**
+            **/.vscode/**
             **/CLAUDE.md
             **/README.md
             **/ROADMAP.md
             **/config.example.php
+            automation/**
+            config/**
+            docs/**
             frontend/**
+            migrations/**
+            scripts/**
+            tests/**
+            tmp/**
             uploads/**
+            schema.sql
 
       - name: Deploy do frontend React na raiz via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

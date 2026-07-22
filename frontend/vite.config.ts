@@ -9,10 +9,25 @@ export default defineConfig(() => {
     base: '/',
     build: {
       assetsDir: 'frontend-assets',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (/node_modules[\\/]react(?:-dom|-router|-router-dom)?[\\/]/.test(id)) return 'vendor-react';
+            if (/node_modules[\\/](?:motion|framer-motion)[\\/]/.test(id)) return 'vendor-motion';
+            if (id.includes('node_modules/@radix-ui/')) return 'vendor-radix';
+            if (id.includes('node_modules/lucide-react/')) return 'vendor-icons';
+            return undefined;
+          },
+        },
+      },
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        // O entrypoint 1.2.0 exporta também um wrapper Vue sem declarar Vue.
+        // Consumimos o core SVG instalado pelo pacote, evitando dependência inútil.
+        '@edusites/bancos-brasil/core': path.resolve(__dirname, 'node_modules/@edusites/bancos-brasil/src/core.js'),
       },
     },
     server: {

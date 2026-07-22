@@ -23,7 +23,10 @@ declare(strict_types=1);
 /** @return array{status:int, body:string, contentType:string} */
 function fapi_run_isolated_request(string $repoRoot, string $path, string $method, string $body, array $headers): array {
     $port = 9200 + random_int(0, 5000);
-    $cmd = escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $port . ' -t ' . escapeshellarg($repoRoot);
+    // O formato em array evita um shell intermediário. Além de eliminar
+    // problemas de escaping, permite que proc_terminate() encerre o servidor
+    // diretamente também no Windows.
+    $cmd = [PHP_BINARY, '-S', '127.0.0.1:' . $port, '-t', $repoRoot];
     $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
     $process = proc_open($cmd, $descriptors, $pipes, $repoRoot);
     if (!is_resource($process)) {

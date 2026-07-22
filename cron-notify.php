@@ -13,6 +13,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/finance.php';
+require_once __DIR__ . '/app/Core/BackupCrypto.php';
+require_once __DIR__ . '/app/Modules/Email/EmailBootstrap.php';
 
 const NOTIFY_WINDOW_MIN = 10;
 
@@ -26,6 +29,40 @@ date_default_timezone_set('America/Sao_Paulo');
 
 $db = get_db();
 $users = $db->query('SELECT id, username, email FROM users WHERE notify_email = 1 AND email IS NOT NULL')->fetchAll();
+
+/** @return array{balance:float,invoices:float,income:float,expense:float,routine_count:int,training_count:int} */
+function cron_monthly_summary(PDO $db, int $uid): array {
+    $accounts = $db->prepare('SELECT COALESCE(SUM(saldo_cents),0) AS saldo, COALESCE(SUM(fatura_cents),0) AS fatura
+        FROM accounts WHERE user_id = ?');
+    $accounts->execute([$uid]);
+    $accRow = $accounts->fetch(PDO::FETCH_ASSOC) ?: ['saldo' => 0, 'fatura' => 0];
+
+    $sinceDate = (new DateTimeImmutable('-30 days'))->format('Y-m-d');
+    $sinceDateTime = (new DateTimeImmutable('-30 days'))->format('Y-m-d H:i:s');
+
+    $income = $db->prepare("SELECT COALESCE(SUM(value_cents),0) FROM transactions
+        WHERE user_id = ? AND kind = 'income' AND tx_date >= ?");
+    $income->execute([$uid, $sinceDate]);
+
+    $expense = $db->prepare("SELECT COALESCE(SUM(value_cents),0) FROM transactions
+        WHERE user_id = ? AND kind = 'expense' AND tx_date >= ?");
+    $expense->execute([$uid, $sinceDate]);
+
+    $routine = $db->prepare("SELECT COUNT(*) FROM xp_events WHERE user_id = ? AND type = 'rotina' AND created_at >= ?");
+    $routine->execute([$uid, $sinceDateTime]);
+
+    $training = $db->prepare("SELECT COUNT(*) FROM xp_events WHERE user_id = ? AND type = 'treino' AND created_at >= ?");
+    $training->execute([$uid, $sinceDateTime]);
+
+    return [
+        'balance' => fin_cents_to_number((int)$accRow['saldo']),
+        'invoices' => fin_cents_to_number((int)$accRow['fatura']),
+        'income' => fin_cents_to_number((int)$income->fetchColumn()),
+        'expense' => fin_cents_to_number((int)$expense->fetchColumn()),
+        'routine_count' => (int)$routine->fetchColumn(),
+        'training_count' => (int)$training->fetchColumn(),
+    ];
+}
 
 $now = new DateTime();
 $nowMin = (int)$now->format('H') * 60 + (int)$now->format('i');
@@ -48,6 +85,7 @@ foreach ($users as $user) {
     $log = array_filter($log, fn($k) => str_starts_with((string)$k, $todayKey), ARRAY_FILTER_USE_KEY);
 
     $due = [];
+    $dueLogKeys = [];
     foreach ($tasks as $t) {
         if (empty($t['time']) || empty($t['title'])) continue;
         // mesma semantica de dow do front: 'all', inteiro ou lista de inteiros
@@ -62,19 +100,24 @@ foreach ($users as $user) {
         $logKey = $todayKey . ':' . ($t['id'] ?? ($t['title'] . $t['time']));
         if (isset($log[$logKey])) continue;
         $due[] = $t;
-        $log[$logKey] = 1;
+        $dueLogKeys[] = $logKey;
     }
 
     if (!$due) {
         continue;
     }
 
-    $lines = array_map(fn($t) => '- ' . $t['time'] . ' — ' . $t['title'], $due);
-    $bodyTxt = "Olá, {$user['username']}!\n\nVocê tem tarefa começando:\n\n"
-        . implode("\n", $lines)
-        . "\n\n— Orby";
-    @mail($user['email'], 'Orby — tarefa começando', $bodyTxt);
+    $delivered = send_transactional_email(
+        (string)$user['email'],
+        email_template_task_reminder((string)$user['username'], $due),
+        email_idempotency_key('task-reminder', (string)$user['id'] . ':' . implode('|', $dueLogKeys)),
+    );
+    if (!$delivered) continue;
+
     $sent += count($due);
+    foreach ($dueLogKeys as $logKey) {
+        $log[$logKey] = 1;
+    }
 
     $up = $db->prepare('INSERT INTO kv_store (user_id, data_key, data_value) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE data_value = VALUES(data_value)');
@@ -82,48 +125,90 @@ foreach ($users as $user) {
 }
 
 /*
- * Backup semanal por e-mail: todo domingo, cada usuário com aviso por
- * e-mail ligado recebe o backup completo em JSON anexo. Dedupe por
- * semana ISO gravado na chave interna _backup_log.
+ * Backup mensal cifrado por e-mail. Opt-in explicito (default desativado) e
+ * envio mensal, nao semanal — protege contra estourar o limite diario/de
+ * payload do Resend. So roda com a chave LEVELOS_BACKUP_KEY configurada no
+ * ambiente e ext-sodium disponivel — sem chave, fica desativado (nunca envia
+ * JSON em texto puro).
  */
 $backups = 0;
-if ((int)$now->format('w') === 0) {
-    $weekKey = $now->format('o-\WW');
+$backupKey = null;
+try {
+    $backupKey = backup_crypto_read_key();
+} catch (BackupCryptoException) {
+    // chave ausente/invalida: backup por e-mail permanece desativado
+}
+
+if ($backupKey !== null) {
+    $todayIso = $now->format('Y-m-d');
     foreach ($users as $user) {
-        $stmt = $db->prepare('SELECT data_value FROM kv_store WHERE user_id = ? AND data_key = ?');
-        $stmt->execute([$user['id'], '_backup_log']);
-        $row = $stmt->fetch();
-        if ($row && json_decode($row['data_value'], true) === $weekKey) continue;
+        try {
+            // Opt-in explícito: default é desativado. Só envia quem ligou o
+            // toggle em Perfil → Preferências → Notificações → Backup por e-mail.
+            $stmt = $db->prepare('SELECT data_value FROM kv_store WHERE user_id = ? AND data_key = ?');
+            $stmt->execute([$user['id'], '_preferences_v1']);
+            $prefsRaw = $stmt->fetchColumn();
+            $prefs = is_string($prefsRaw) ? json_decode($prefsRaw, true) : [];
+            $wantsBackup = is_array($prefs) && ($prefs['notifications']['backup'] ?? false) === true;
+            if (!$wantsBackup) continue;
 
-        $stmt = $db->prepare('SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE "\_%"');
-        $stmt->execute([$user['id']]);
-        $data = [];
-        foreach ($stmt->fetchAll() as $kv) {
-            $data[$kv['data_key']] = json_decode($kv['data_value']);
+            // Mensal (30 dias), não semanal — controla payload e volume de envio.
+            $stmt->execute([$user['id'], '_backup_email_sent']);
+            $lastRaw = $stmt->fetchColumn();
+            $last = is_string($lastRaw) ? (string)json_decode($lastRaw, true) : '';
+            if ($last !== '' && strtotime($last) !== false && (time() - strtotime($last)) < 30 * 86400) {
+                continue;
+            }
+
+            // Mesmo shape do api/export.php: kv publico + sets financeiros relacionais.
+            $data = [];
+            $kvStmt = $db->prepare("SELECT data_key, data_value FROM kv_store WHERE user_id = ? AND data_key NOT LIKE '\\_%'");
+            $kvStmt->execute([$user['id']]);
+            foreach ($kvStmt->fetchAll() as $kvRow) {
+                $data[$kvRow['data_key']] = json_decode($kvRow['data_value']);
+            }
+            foreach (FINANCE_SETS as $kvKey => $set) {
+                $data[$kvKey] = finance_load_set($db, (int)$user['id'], $set);
+            }
+            $json = json_encode([
+                'format' => 'level-os-user-backup',
+                'version' => 2,
+                'exported_at' => $now->format(DATE_ATOM),
+                'data' => $data,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+            $handle = fopen('php://temp/maxmemory:8388608', 'r+b');
+            if ($handle === false) continue;
+            $writer = new BackupArtifactWriter($handle, $backupKey);
+            $chunks = str_split($json, 262144);
+            $total = count($chunks);
+            foreach ($chunks as $i => $chunk) {
+                $writer->writeFrame($chunk, $i === $total - 1);
+            }
+            rewind($handle);
+            $artifact = stream_get_contents($handle);
+            fclose($handle);
+            if (!is_string($artifact) || $artifact === '') continue;
+
+            $summary = cron_monthly_summary($db, (int)$user['id']);
+            $delivered = send_transactional_email(
+                (string)$user['email'],
+                email_template_monthly_backup((string)$user['username'], $todayIso, $summary),
+                email_idempotency_key('monthly-backup', $user['id'] . ':' . $todayIso),
+                [['filename' => 'level-os-backup-' . $todayIso . '.lvbk', 'content' => base64_encode($artifact)]],
+            );
+            if (!$delivered) continue;
+
+            $up = $db->prepare('INSERT INTO kv_store (user_id, data_key, data_value) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE data_value = VALUES(data_value)');
+            $up->execute([$user['id'], '_backup_email_sent', json_encode($todayIso)]);
+            $backups++;
+        } catch (Throwable $e) {
+            error_log('weekly backup failed for user ' . $user['id'] . ': ' . backup_exception_class($e));
         }
-        if (!$data) continue;
-
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        $boundary = 'orby' . bin2hex(random_bytes(12));
-        $headers = "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"$boundary\"";
-        $body = "--$boundary\r\n"
-            . "Content-Type: text/plain; charset=utf-8\r\n\r\n"
-            . "Olá, {$user['username']}!\n\nSegue o backup semanal dos seus dados do Orby.\n"
-            . "Pra restaurar: Perfil -> Backup -> Restaurar backup.\n\n— Orby\r\n"
-            . "--$boundary\r\n"
-            . "Content-Type: application/json; name=\"orby-backup-{$now->format('Y-m-d')}.json\"\r\n"
-            . "Content-Disposition: attachment; filename=\"orby-backup-{$now->format('Y-m-d')}.json\"\r\n"
-            . "Content-Transfer-Encoding: base64\r\n\r\n"
-            . chunk_split(base64_encode($json))
-            . "--$boundary--";
-        @mail($user['email'], 'Orby — backup semanal dos seus dados', $body, $headers);
-        $backups++;
-
-        $up = $db->prepare('INSERT INTO kv_store (user_id, data_key, data_value) VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE data_value = VALUES(data_value)');
-        $up->execute([$user['id'], '_backup_log', json_encode($weekKey)]);
     }
 }
 
 header('Content-Type: text/plain');
-echo "ok - avisos enviados: $sent - backups enviados: $backups\n";
+$backupNote = $backupKey === null ? ' (backup desativado: chave nao configurada)' : '';
+echo "ok - avisos enviados: $sent - backups enviados: $backups$backupNote\n";

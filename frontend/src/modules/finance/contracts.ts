@@ -9,6 +9,8 @@
  * (saldo, fatura, chequeEspecial, etc.) refletem o shape observado no PHP.
  */
 
+import type { SalaryInput } from "./salary"
+
 /** Chave pública `accounts_v2` (relacional). */
 export interface AccountV2 {
   id: string
@@ -46,18 +48,26 @@ export interface IncomeLine {
   id: string
   label: string
   value: number
-  type: "fixa" | "variavel" | "temporaria" | null
+  type: "fixa" | "variavel" | "temporaria" | "momentanea" | "avulso" | null
+  date?: string | null
   endDate: string | null
   payday: number | null
   accountId: string | null
   createdAt: number | null
+  /** Parâmetros da estimativa CLT, persistidos para permitir reedição. */
+  salaryDetails?: SalaryInput | null
 }
 
 /** Chave pública `ifood-entries` (relacional). */
 export interface IfoodEntry {
+  id?: string
   date: string | null
   valor: number
   km: number | null
+  /** Metadados opcionais usados pelo preview/localStorage; o backend legado ignora extras. */
+  label?: string | null
+  accountId?: string | null
+  source?: "manual" | "ofx" | string
 }
 
 /** Chave auxiliar `vaults` (kv). Shape de alto nível. */

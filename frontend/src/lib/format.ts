@@ -1,7 +1,7 @@
 /** Formatadores pt-BR compartilhados pela camada de UI. */
 
 export function formatCurrency(value: number): string {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\u00a0/g, " ")
 }
 
 /** Valor monetário com sinal explícito (+/−) para deltas. */
@@ -17,7 +17,7 @@ export function formatCurrencyCompact(value: number): string {
     currency: "BRL",
     notation: "compact",
     maximumFractionDigits: 1,
-  })
+  }).replace(/\u00a0/g, " ")
 }
 
 export function formatWeight(value: number): string {

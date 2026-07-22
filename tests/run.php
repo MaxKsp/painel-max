@@ -5,6 +5,13 @@ $repoRoot = dirname(__DIR__);
 $pattern = $repoRoot . '/tests/cases/*_test.php';
 $files = glob($pattern) ?: [];
 sort($files);
+$filter = isset($argv[1]) ? trim((string)$argv[1]) : '';
+if ($filter !== '') {
+    $files = array_values(array_filter(
+        $files,
+        static fn(string $file): bool => str_contains(basename($file), $filter)
+    ));
+}
 
 $passed = 0;
 $failed = 0;

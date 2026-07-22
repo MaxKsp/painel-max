@@ -1,8 +1,9 @@
-// Service worker minimo do Orby: cacheia so assets estaticos.
+// Service worker minimo do Level OS: cacheia so assets estaticos.
 // NUNCA cacheia paginas PHP nem a API (dados sempre frescos e atras de login).
-const CACHE = 'pm-static-v1';
+// Estrategia: network-first com fallback ao cache — deploy novo propaga na hora;
+// o cache so responde quando a rede falha (offline).
+const CACHE = 'level-os-static-v3';
 const STATIC = [
-  'assets/qrcode.min.js',
   'assets/auth.css',
   'assets/icon-192.png',
   'assets/icon-512.png',
@@ -24,10 +25,12 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (!url.pathname.includes('/assets/')) return; // paginas e API vao direto pra rede
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy));
+    fetch(e.request).then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+      }
       return res;
-    }))
+    }).catch(() => caches.match(e.request))
   );
 });

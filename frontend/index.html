@@ -3,16 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Orby — rotina, finanças e treinos em um só lugar." />
-    <title>Orby</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
-    <!-- Material Symbols Outlined -->
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <meta name="description" content="Level OS — finanças, rotina e treino em evolução contínua." />
+    <script>
+      try {
+        const theme = localStorage.getItem('orby_theme') === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.removeAttribute('data-accent');
+        localStorage.removeItem('orby_accent');
+        localStorage.removeItem('orby_custom_accent');
+      } catch (_) {
+        document.documentElement.dataset.theme = 'dark';
+        document.documentElement.removeAttribute('data-accent');
+      }
+    </script>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="mask-icon" href="/favicon.svg" color="#31e6d4" />
+    <meta name="theme-color" content="#08090c" />
+    <title>Level OS</title>
   </head>
-  <body class="bg-[#050507] text-[#e0e3e5] min-h-screen antialiased">
+  <body class="min-h-screen antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

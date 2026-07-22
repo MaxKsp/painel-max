@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+import { AnimatedNumber } from "../../../components/ui/AnimatedNumber"
 import { Icon, ProgressRing, SectionCard } from "../../../design-system"
 import type { Task } from "../../routine/contracts"
 import { routineSummary } from "../../routine/selectors"
@@ -16,24 +18,24 @@ export function RoutineOverview({ tasks }: RoutineOverviewProps) {
       description="Prioridades por horário"
       bodyClassName="p-0"
       action={
-        <a
-          href="#routine"
-          className="text-sm font-medium text-primary hover:text-on-surface"
+        <Link
+          to="/agenda"
+          className="rounded text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
         >
-          Abrir
-        </a>
+          Ver rotina
+        </Link>
       }
     >
       <div className="flex items-center gap-5 px-5 py-5 sm:px-6">
         <ProgressRing value={summary.progress} size={104}>
           <span className="font-mono text-xl font-semibold text-on-surface">
-            {summary.progress}%
+            <AnimatedNumber value={summary.progress} animationKey="overview-routine-progress" formatValue={(value) => `${Math.round(value)}%`} />
           </span>
         </ProgressRing>
         <div>
           <p className="text-sm font-medium text-on-surface">Progresso do dia</p>
           <p className="mt-1 text-sm leading-5 text-on-surface-variant">
-            {summary.completed} de {summary.total} tarefas concluídas.
+            <AnimatedNumber value={summary.completed} animationKey="overview-routine-completed" formatValue={(value) => Math.round(value).toLocaleString("pt-BR")} /> de <AnimatedNumber value={summary.total} animationKey="overview-routine-total" formatValue={(value) => Math.round(value).toLocaleString("pt-BR")} /> tarefas concluídas.
           </p>
           <p className="mt-3 text-xs font-medium text-tertiary">
             {summary.pending === 0 ? "Tudo em dia" : "Bom ritmo"}
@@ -42,7 +44,7 @@ export function RoutineOverview({ tasks }: RoutineOverviewProps) {
       </div>
 
       <div className="border-t border-outline-variant">
-        <p className="px-5 pt-4 text-xs font-medium uppercase tracking-wider text-muted sm:px-6">
+        <p className="px-5 pt-4 text-sm text-muted sm:px-6">
           A seguir
         </p>
         <ul className="px-2 py-2">

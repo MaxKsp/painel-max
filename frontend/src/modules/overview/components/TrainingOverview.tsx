@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+import { AnimatedNumber } from "../../../components/ui/AnimatedNumber"
 import { Badge, Icon, SectionCard, Sparkline } from "../../../design-system"
 import { formatWeight } from "../../../lib/format"
 import type { WeightRecord, WorkoutSession } from "../../training/contracts"
@@ -6,9 +8,10 @@ import { trainingSummary } from "../../training/selectors"
 interface TrainingOverviewProps {
   workout: WorkoutSession
   weights: WeightRecord[]
+  onOpenWorkout?: () => void
 }
 
-export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
+export function TrainingOverview({ workout, weights, onOpenWorkout }: TrainingOverviewProps) {
   const summary = trainingSummary(workout, weights)
   const weightValues = weights.map((w) => w.weight)
 
@@ -17,12 +20,17 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
       title="Treino de hoje"
       description={summary.focus}
       bodyClassName="p-0"
-      action={<Badge tone="primary">{summary.durationMin} min</Badge>}
+      action={
+        <div className="flex items-center gap-3">
+          <Badge tone="primary"><AnimatedNumber value={summary.durationMin} animationKey="overview-training-duration" formatValue={(value) => `${Math.round(value)} min`} /></Badge>
+          {onOpenWorkout ? <button type="button" onClick={onOpenWorkout} className="rounded text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary">Iniciar treino</button> : <Link to="/treinos" className="rounded text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary">Abrir treino</Link>}
+        </div>
+      }
     >
       <div className="px-5 py-5 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-muted">
+            <p className="text-sm text-muted">
               Sessão
             </p>
             <h3 className="mt-1 font-semibold text-on-surface">
@@ -30,7 +38,7 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
             </h3>
           </div>
           <p className="font-mono text-sm text-on-surface-variant">
-            {summary.completed}/{summary.total}
+            <AnimatedNumber value={summary.completed} animationKey="overview-training-completed" formatValue={(value) => Math.round(value).toLocaleString("pt-BR")} />/<AnimatedNumber value={summary.total} animationKey="overview-training-total" formatValue={(value) => Math.round(value).toLocaleString("pt-BR")} />
           </p>
         </div>
 
@@ -80,21 +88,21 @@ export function TrainingOverview({ workout, weights }: TrainingOverviewProps) {
           <div>
             <p className="text-sm text-on-surface-variant">Peso atual</p>
             <p className="mt-1 font-mono text-2xl font-medium text-on-surface">
-              {formatWeight(summary.currentWeight)}
+              <AnimatedNumber value={summary.currentWeight} animationKey="overview-training-weight" formatValue={formatWeight} />
             </p>
-            <p className="mt-1 text-xs font-medium text-tertiary">
+            <p className="mt-1 text-xs font-medium text-primary">
               {summary.weightDelta === 0
                 ? "Estável na semana"
-                : `${summary.weightDelta > 0 ? "+" : "−"}${Math.abs(summary.weightDelta).toFixed(1)} kg na semana`}
+                : <><AnimatedNumber value={Math.abs(summary.weightDelta)} animationKey="overview-training-weight-delta" formatValue={(value) => `${summary.weightDelta > 0 ? "+" : "−"}${value.toFixed(1).replace(".", ",")} kg`} /> na semana</>}
             </p>
           </div>
           <Sparkline
             values={weightValues}
-            tone="tertiary"
-            width={140}
+            tone="primary"
             height={48}
-            className="h-12 w-32"
+            className="w-32"
             ariaLabel="Tendência de peso"
+            valueFormatter={(value) => `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`}
           />
         </div>
       </div>

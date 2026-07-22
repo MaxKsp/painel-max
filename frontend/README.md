@@ -1,4 +1,4 @@
-# Frontend Orby
+# Frontend Level OS
 
 Frontend modular em React 19, TypeScript, Vite e Tailwind CSS v4. O backend PHP e as APIs ficam na mesma origem.
 
@@ -9,13 +9,11 @@ npm ci
 npm run dev
 ```
 
-O desenvolvimento sem sessão PHP pode usar dados isolados:
-
-```env
-VITE_USE_MOCKS=true
-```
-
-Mocks nunca são ativados como fallback de erro. Com a variável ausente ou diferente de `true`, o aplicativo usa exclusivamente `/api/*.php`.
+O Preview do Vite usa mocks e `localStorage`, porque não possui sessão PHP. No
+build autenticado, o módulo Financeiro detecta `window.CSRF_TOKEN`, carrega o
+bootstrap real em `GET /api/data.php?all=1` e persiste os quatro conjuntos
+relacionais por `POST /api/finance.php`. O OFX também usa o preview protegido
+de `/api/import-ofx.php`; o parser local existe somente para desenvolvimento.
 
 ## Validação
 
@@ -33,7 +31,9 @@ O build executa `scripts/build-php-shell.mjs`, converte o HTML do Vite em `dist/
 - `window.CSRF_TOKEN`, gerado por `csrf_token()`;
 - os assets versionados do Vite.
 
-As mutations são bloqueadas quando o token não existe. Todas as chamadas usam `credentials: "same-origin"`.
+As demais mutations React devem reutilizar esse token e a sessão da mesma
+origem. Recursos auxiliares ainda não portados para as telas React permanecem
+no frontend legado durante a migração.
 
 ## Rotas
 
@@ -43,7 +43,7 @@ As mutations são bloqueadas quando o token não existe. Todas as chamadas usam 
 - `/treinos`
 - `/perfil`
 
-O `.htaccess` envia somente essas rotas inexistentes para `index.php`. Arquivos, páginas PHP e APIs reais não são interceptados.
+O `BrowserRouter` usa caminhos limpos. Em produção, o `.htaccess` envia somente essas rotas inexistentes para `index.php`; arquivos, páginas PHP e APIs reais não são interceptados.
 
 ## Deploy
 

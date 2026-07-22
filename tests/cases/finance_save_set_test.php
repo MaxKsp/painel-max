@@ -38,6 +38,28 @@ return function (): void {
         finance_load_set($db, $uid, 'expense')[0]['id'],
         'client_id from the payload must come back as the public id.'
     );
+    $storedCents = $db->query("SELECT value_cents FROM transactions WHERE client_id = 'exp_001'")->fetchColumn();
+    test_assert_same(
+        fin_money_to_cents($fixture['expense_lines_v4'][0]['value']),
+        (int)$storedCents,
+        'Financial values must be persisted canonically as integer cents.'
+    );
+
+    $salary = [
+        'id' => 'salary_clt', 'label' => 'Salário CLT', 'value' => 4321.09,
+        'type' => 'fixa', 'date' => null, 'endDate' => null, 'payday' => 5, 'accountId' => null,
+        'createdAt' => 1720000000,
+        'salaryDetails' => [
+            'grossSalary' => 6000, 'dependents' => 1, 'hasTransportVoucher' => true,
+            'transportVoucherBenefit' => 300, 'healthPlan' => 120,
+        ],
+    ];
+    finance_save_set($db, $uid, 'income', [$salary]);
+    test_assert_equals(
+        $salary,
+        finance_load_set($db, $uid, 'income')[0],
+        'CLT parameters must survive the relational round-trip for later editing.'
+    );
 
     // Replace total: salvar de novo substitui o set inteiro, nao faz merge.
     finance_save_set($db, $uid, 'expense', [$fixture['expense_lines_v4'][1]]);

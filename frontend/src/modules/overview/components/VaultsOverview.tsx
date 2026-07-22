@@ -1,24 +1,27 @@
+import { Link } from "react-router-dom"
 import { Icon, SectionCard } from "../../../design-system"
 import { formatCurrency } from "../../../lib/format"
 import type { Vault } from "../../finance/contracts"
 
 interface VaultsOverviewProps {
   vaults: Vault[]
+  className?: string
 }
 
-export function VaultsOverview({ vaults }: VaultsOverviewProps) {
+export function VaultsOverview({ vaults, className }: VaultsOverviewProps) {
   return (
     <SectionCard
       title="Cofrinhos"
+      className={className}
       description="Metas de reserva"
       bodyClassName="p-0"
       action={
-        <a
-          href="#finance"
-          className="text-sm font-medium text-primary hover:text-on-surface"
+        <Link
+          to="/financeiro"
+          className="rounded text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
         >
-          Gerenciar
-        </a>
+          Gerenciar cofrinhos
+        </Link>
       }
     >
       <ul className="flex flex-col gap-4 px-5 py-5 sm:px-6">
@@ -51,7 +54,7 @@ export function VaultsOverview({ vaults }: VaultsOverviewProps) {
                 />
               </div>
               <p className="mt-1 text-xs text-muted">
-                {pct}% de {formatCurrency(meta)}
+                <span className="numeric-value">{pct}%</span> de <span className="numeric-value">{formatCurrency(meta)}</span>
               </p>
             </li>
           )

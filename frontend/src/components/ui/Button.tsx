@@ -14,13 +14,13 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseStyle = "font-sans font-bold uppercase tracking-wider rounded-lg transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer shrink-0";
+  const baseStyle = "level-button relative isolate flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-lg font-sans font-semibold tracking-wide transition-[color,background-color,border-color,box-shadow,filter,transform] duration-200 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none";
   
   const variants = {
-    primary: "bg-gradient-to-r from-[#adc6ff] to-[#d0bcff] text-[#002e69] hover:brightness-110 shadow-[0_0_15px_rgba(173,198,255,0.15)]",
-    secondary: "bg-[#191c1e] border border-[#424753] text-[#e0e3e5] hover:bg-[#272a2c] hover:border-[#adc6ff]/50",
-    danger: "bg-[#93000a]/30 border border-[#ffb4ab]/30 text-[#ffb4ab] hover:bg-[#93000a]/50 hover:border-[#ffb4ab]/50",
-    ghost: "bg-transparent text-[#8c909f] hover:text-[#e0e3e5] hover:bg-white/5",
+    primary: "level-button--primary bg-primary text-on-primary shadow-sm",
+    secondary: "level-button--secondary border border-outline-variant bg-surface-container text-on-surface",
+    danger: "level-button--danger border border-error/30 bg-error/15 text-error",
+    ghost: "level-button--ghost bg-transparent text-muted",
   };
 
   const sizes = {
@@ -31,6 +31,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
+      data-variant={variant}
       className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >

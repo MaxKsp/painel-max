@@ -1,6 +1,0 @@
-{
-  "name": "Orby",
-  "description": "O ecossistema definitivo para performance financeira e foco operacional.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

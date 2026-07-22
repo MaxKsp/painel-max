@@ -12,7 +12,8 @@ própria e um PR separado.
       + `Retry-After` ao estourar. SQL em `migrations/2026-07-06-rate-limit.sql`.
 - [ ] **Backup por e-mail cifrado** — o cron manda os dados financeiros em
       JSON puro; cifrar o anexo antes de ligar o cron em produção.
-- [ ] **Remover `X-Powered-By`** — versão do PHP vaza no header.
+- [x] **Remover `X-Powered-By`** — removido em profundidade no `.htaccess` e
+      `expose_php` desativado; confirmar o header no ambiente Hostinger.
 - [ ] **Expiração de sessão por inatividade** — hoje só morre no fechar do
       navegador.
 
@@ -30,22 +31,26 @@ própria e um PR separado.
       (`user_plan`, `plan_allows`, `require_plan` → HTTP 402), leitura em
       `api/subscription.php`. Acesso lido sempre do banco, nunca do cliente.
       Plano só muda server-side. SQL em `migrations/2026-07-06-subscriptions.sql`.
-- [ ] **Gateway + webhook** — checkout (Stripe/Mercado Pago), validar
-      assinatura do webhook, idempotência, tratar cancelamento/falha.
-      Atualiza `subscriptions`; `require_plan` já lê dela.
-- [ ] **Gate nas features pagas** — aplicar `require_plan('individual')`
-      nos endpoints/telas de feature paga conforme forem nascendo.
+- [x] **Gateway + webhook** — Mercado Pago como gateway único para Pix e
+      cartão, checkout hospedado, assinatura validada e processamento
+      idempotente por evento/pagamento.
+- [x] **Gate nas features pagas** — escrita financeira, OFX, treino, progresso
+      e Agente de IA protegidos no servidor com `require_plan('individual')`.
 
 ## 🔴 Fundação (destrava o resto)
 
 - [ ] **Domínio próprio** — sair do subdomínio temporário da Hostinger.
       Destrava: e-mail confiável, recuperação de senha, URL estável pro
       Google OAuth e identidade de marca de verdade.
-- [ ] **E-mail transacional confiável** — trocar `mail()` pelo SMTP da
-      própria hospedagem (com SPF/DKIM configurados no domínio). Hoje a
-      entrega de confirmação/aviso é loteria; depende do item acima.
-- [ ] **Recuperação de senha por e-mail** — fluxo de "esqueci a senha" com
-      token de uso único e expiração. Depende dos dois itens acima.
+- [x] **E-mail transacional confiável** — cliente Resend via API HTTPS,
+      remetente verificado, texto + HTML e idempotência nos fluxos de
+      confirmação, senha e lembretes. Sem dependência de `mail()`/SMTP local.
+- [x] **Recuperação de senha por e-mail** — fluxo de "esqueci a senha" com
+      token de uso único, hash no banco, expiração e rate limit implementado.
+      A entrega confiável em produção ainda depende do domínio/SMTP acima.
+- [ ] **Supabase Auth (em ativação)** — bridge gerenciado, callback PKCE, sessão PHP,
+      vinculação segura de contas antigas e recuperação integrados por feature
+      flag. Falta criar/configurar o projeto externo e executar o smoke real.
 
 ## 🟠 Funcionalidade
 
@@ -98,8 +103,8 @@ própria e um PR separado.
       despesa; dispensável por mês. Puro no cliente, sem backend.
 - [ ] **Web Push (VAPID)** — notificação nativa com o app fechado. Exige
       lib de criptografia via composer; hoje o caminho é o aviso por e-mail.
-- [ ] **Diagnóstico com IA de verdade** — endpoint PHP chamando uma API de
-      LLM com os últimos 14 dias de agenda e caixa (hoje é maquete).
+- [x] **Agente de IA real** — endpoint PHP com provedores compatíveis,
+      ferramentas controladas, auditoria, criptografia e desfazer ação.
 
 ## 🟡 Qualidade e polimento
 
@@ -109,15 +114,17 @@ própria e um PR separado.
       (rendas, despesas por categoria, saldo mês a mês, contas/cartões) numa
       página de impressão limpa via `window.print()` (Salvar como PDF). Sem
       lib no servidor; puro cliente com CSS `@media print`.
-- [x] **Backup automático agendado** — aos domingos o cron envia o JSON em
-      anexo pra quem tem aviso por e-mail ligado.
+- [ ] **Backup automático agendado por e-mail** — envio do JSON puro foi
+      desativado; só reativar com artefato cifrado e autenticado.
 - [x] **Tema claro** — terceira opção de fundo no Perfil.
 - [ ] **Testes automatizados** — PHPUnit pra auth/TOTP/rate-limit e um
       smoke E2E do fluxo login → lançamento → backup.
-- [ ] **Trilha de auditoria** — registrar logins (data, IP, método) e
-      mostrar "última atividade" no Perfil.
-- [ ] **Separar `index.php` em módulos** (`style.css`, `app.js`) — o
-      arquivo único já passa de 2k linhas; ruim pra diff e review.
+- [ ] **Trilha de auditoria** — persistência e eventos sensíveis já existem;
+      falta registrar todos os métodos de login e mostrar a última atividade
+      no Perfil.
+- [x] **Separar `index.php` em módulos** — `index.php` virou front controller;
+      a compatibilidade legada está isolada em `app/Shared/Dashboard/` e o
+      deploy continua usando o shell React gerado pelo Vite.
 - [ ] **Endurecer verificação de e-mail** — hoje é só um selo; tornar
       obrigatória quando o e-mail for confiável.
 - [ ] **Testar o alarme de tarefas no dia a dia** — confirmar precisão do

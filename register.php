@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/app/Shared/AuthView.php';
 
 if (current_user_id() !== null) {
     header('Location: index.php');
@@ -36,17 +37,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $token = bin2hex(random_bytes(32));
-                $stmt = $db->prepare('INSERT INTO users (username, password_hash, email, email_verify_token) VALUES (?, ?, ?, ?)');
-                $stmt->execute([$username, $hash, $email, $token]);
-                $userId = (int)$db->lastInsertId();
+                try {
+                    $db->beginTransaction();
+                    $stmt = $db->prepare('INSERT INTO users (username, password_hash, email, email_verify_token) VALUES (?, ?, ?, ?)');
+                    $stmt->execute([$username, $hash, $email, $token]);
+                    $userId = (int)$db->lastInsertId();
+                    $subscription = $db->prepare("INSERT INTO subscriptions (user_id, plan, status, current_period_end, trial_ends_at) VALUES (?, 'free', 'active', NULL, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 30 DAY))");
+                    $subscription->execute([$userId]);
+                    $db->commit();
+                } catch (Throwable $e) {
+                    if ($db->inTransaction()) $db->rollBack();
+                    error_log('register: ' . $e->getMessage());
+                    $error = 'Não foi possível concluir o cadastro. Tente novamente.';
+                    $userId = 0;
+                }
 
-                $verifyUrl = (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/verify-email.php?token=' . $token;
-                @mail($email, 'Confirme seu e-mail — Orby', "Clique para confirmar seu e-mail:\n\n$verifyUrl\n\nSe você não criou essa conta, ignore este e-mail.");
+                $baseUrl = $userId > 0 ? trusted_app_base_url() : null;
+                if ($userId > 0 && $baseUrl !== null) {
+                    $verifyUrl = $baseUrl . '/verify-email.php?token=' . rawurlencode($token);
+                    send_transactional_email(
+                        $email,
+                        email_template_verification($verifyUrl),
+                        email_idempotency_key('email-verification', $userId . ':' . hash('sha256', $token)),
+                    );
+                } elseif ($userId > 0) {
+                    error_log('Verification e-mail skipped: configure a valid HTTPS APP_URL.');
+                }
 
-                reset_attempts();
-                complete_login($userId);
-                header('Location: index.php');
-                exit;
+                if ($userId > 0) {
+                    reset_attempts();
+                    complete_login($userId);
+                    header('Location: index.php');
+                    exit;
+                }
             }
         }
     }
@@ -55,39 +78,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Orby — Criar conta</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/auth.css">
+<?php auth_view_head('Level OS — Criar conta'); ?>
 </head>
-<body>
-  <div class="brand">
-    <svg class="orbymark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="obg" x1="0" y1="48" x2="48" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs>
-      <g transform="rotate(-18 24 24)"><path d="M3 24a21 7.5 0 0 1 42 0" stroke="url(#obg)" stroke-width="3.4" stroke-linecap="round"/></g>
-      <circle cx="24" cy="24" r="12.5" stroke="var(--text)" stroke-width="7"/>
-      <g transform="rotate(-18 24 24)"><path d="M45 24a21 7.5 0 0 1 -42 0" stroke="url(#obg)" stroke-width="3.4" stroke-linecap="round"/></g>
-      <circle cx="40" cy="7.5" r="3.1" fill="#2DD4BF"/>
-    </svg>
-    <div class="brandname">Orby</div>
-  </div>
-  <form class="card" method="POST" autocomplete="off">
+<body data-auth-page="register">
+<?php auth_view_chrome(); ?>
+<main class="auth-layout">
+  <?php auth_view_intro(
+      'Uma base para a vida real',
+      'Organize hoje. Enxergue mais longe.',
+      'Crie seu espaço Level OS e reúna decisões financeiras, compromissos e evolução pessoal sem perder o contexto.',
+      ['Configuração rápida', 'Tema que acompanha você', 'Privacidade por padrão', 'Acesso com 2FA']
+  ); ?>
+  <section class="auth-form-column" aria-label="Criação de conta">
+  <form class="card" method="POST" autocomplete="on" data-supabase-register>
     <?= csrf_field() ?>
     <h1>Criar sua conta</h1>
     <p class="sub">Leva menos de um minuto. Seus dados ficam só com você.</p>
-    <?php if ($error): ?><div class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+    <?php if ($error): ?><div class="error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
     <label for="username">Usuário</label>
-    <input type="text" id="username" name="username" placeholder="seu.usuario" required autofocus value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+    <input type="text" id="username" name="username" placeholder="seu.usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
     <label for="email">E-mail</label>
-    <input type="email" id="email" name="email" placeholder="voce@exemplo.com" required value="<?= htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+    <input type="email" id="email" name="email" placeholder="voce@exemplo.com" autocomplete="email" autocapitalize="none" spellcheck="false" required value="<?= htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
     <label for="password">Senha</label>
-    <input type="password" id="password" name="password" placeholder="mínimo 8 caracteres" required minlength="8">
+    <input type="password" id="password" name="password" placeholder="mínimo 8 caracteres" autocomplete="new-password" required minlength="8">
     <label for="confirm">Confirmar senha</label>
-    <input type="password" id="confirm" name="confirm" placeholder="repita a senha" required minlength="8">
+    <input type="password" id="confirm" name="confirm" placeholder="repita a senha" autocomplete="new-password" required minlength="8">
     <button type="submit">Criar conta</button>
     <div class="footer">Já tem conta? <a href="login.php">Entrar</a></div>
   </form>
+  </section>
+</main>
 </body>
 </html>

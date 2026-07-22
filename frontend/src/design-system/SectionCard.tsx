@@ -3,7 +3,7 @@ import { cn } from "../lib/cn"
 
 interface SectionCardProps {
   title: string
-  description?: string
+  description?: ReactNode
   icon?: ReactNode
   action?: ReactNode
   children: ReactNode
@@ -11,7 +11,7 @@ interface SectionCardProps {
   bodyClassName?: string
 }
 
-/** Cartão com cabeçalho padronizado, base de composição das seções. */
+/** Seção editorial leve: hierarquia por espaço e um único hairline. */
 export function SectionCard({
   title,
   description,
@@ -24,23 +24,23 @@ export function SectionCard({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-low",
+        "level-panel relative min-w-0 w-full border-t border-outline-variant/80 bg-transparent",
         className,
       )}
     >
-      <header className="flex items-center justify-between gap-3 border-b border-outline-variant px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
+      <header className="relative flex min-w-0 items-start justify-between gap-4 px-0 pb-3 pt-5">
+        <div className="flex min-w-0 items-center gap-3">
           {icon}
-          <div>
+          <div className="min-w-0">
             <h2 className="font-semibold text-on-surface">{title}</h2>
             {description ? (
               <p className="mt-0.5 text-sm text-muted">{description}</p>
             ) : null}
           </div>
         </div>
-        {action}
+        <span className="shrink-0">{action}</span>
       </header>
-      <div className={cn("p-5 sm:p-6", bodyClassName)}>{children}</div>
+      <div className={cn("relative pb-7 pt-2", bodyClassName)}>{children}</div>
     </section>
   )
 }

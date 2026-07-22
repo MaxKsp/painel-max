@@ -1,65 +1,105 @@
-import { useEffect } from 'react';
-import { Cadastro } from './components/Auth/Cadastro';
-import { Login } from './components/Auth/Login';
-import { Recuperar } from './components/Auth/Recuperar';
-import { TwoFactor } from './components/Auth/TwoFactor';
-import { Verificacao } from './components/Auth/Verificacao';
-import { ModalsContainer } from './components/Dashboard/ModalsContainer';
+import { lazy, Suspense } from 'react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BottomNav } from './components/Dashboard/BottomNav';
 import { TopNavBar } from './components/Dashboard/TopNavBar';
-import { OverviewScreen } from './modules/overview/OverviewScreen';
-import { Bloqueada } from './components/Simulation/Bloqueada';
-import { Expirada } from './components/Simulation/Expirada';
-import { Mapa } from './components/Simulation/Mapa';
-import { AppContextProvider, useApp } from './context/AppContext';
+import { AppContextProvider } from './context/AppContext';
+import { FinanceProvider } from './modules/finance/store';
+import { TrainingProvider } from './modules/training/store';
+import { ShaderBackground } from './components/ui/ShaderBackground';
+import { ProgressProvider } from './modules/progress/store';
+import { LevelUpOverlay } from './modules/progress/components/LevelUpOverlay';
+import { XpFeedback } from './modules/progress/components/XpFeedback';
+import { SubscriptionProvider, useSubscription } from './modules/subscription/store';
+import { ExpiredPaywall } from './modules/subscription/ExpiredPaywall';
+import { IdentityProvider } from './modules/identity/store';
+import { PreferencesProvider } from './modules/preferences/store';
+import { TrialBanner } from './modules/subscription/TrialBanner';
+import { CalendarProvider } from './modules/calendar/store';
+import { AssistantProvider } from './modules/assistant/store';
+import { NutritionProvider } from './modules/nutrition/store';
+import { AssistantCommand } from './modules/assistant/AssistantCommand';
 
-const AppRouter = () => {
-  const { currentScreen, isSearchOpen, setIsSearchOpen, searchQuery, setSearchQuery } = useApp();
+const ModalsContainer = lazy(() => import('./components/Dashboard/ModalsContainer').then((module) => ({ default: module.ModalsContainer })));
+const OverviewScreen = lazy(() => import('./modules/overview/OverviewScreen').then((module) => ({ default: module.OverviewScreen })));
+const FinanceScreen = lazy(() => import('./modules/finance/FinanceScreen').then((module) => ({ default: module.FinanceScreen })));
+const ProfileScreen = lazy(() => import('./modules/profile/ProfileScreen').then((module) => ({ default: module.ProfileScreen })));
+const RoutineScreen = lazy(() => import('./modules/routine/RoutineScreen').then((module) => ({ default: module.RoutineScreen })));
+const TrainingScreen = lazy(() => import('./modules/training/TrainingScreen').then((module) => ({ default: module.TrainingScreen })));
+const NutritionScreen = lazy(() => import('./modules/nutrition/NutritionScreen').then((module) => ({ default: module.NutritionScreen })));
+const FirstLoginOnboarding = lazy(() => import('./modules/onboarding/FirstLoginOnboarding').then((module) => ({ default: module.FirstLoginOnboarding })));
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsSearchOpen(false);
-      if (event.key === '/' && document.activeElement?.tagName !== 'INPUT') {
-        event.preventDefault();
-        setIsSearchOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [setIsSearchOpen]);
+function PageFallback() {
+  return <main className="level-page mx-auto max-w-[1180px] px-4 pb-24 pt-24 sm:px-6" aria-busy="true" aria-label="Carregando página">
+    <div className="h-9 w-52 animate-pulse rounded-lg bg-surface-container-high" />
+    <div className="mt-3 h-4 w-80 max-w-full animate-pulse rounded bg-surface-container" />
+    <div className="mt-8 grid gap-4 md:grid-cols-2"><div className="h-52 animate-pulse rounded-2xl bg-surface-container" /><div className="h-52 animate-pulse rounded-2xl bg-surface-container" /></div>
+  </main>;
+}
 
-  if (currentScreen === 'login') return <Login />;
-  if (currentScreen === 'cadastro') return <Cadastro />;
-  if (currentScreen === 'recuperar') return <Recuperar />;
-  if (currentScreen === 'verificacao') return <Verificacao />;
-  if (currentScreen === '2fa') return <TwoFactor />;
-  if (currentScreen === 'expirada') return <Expirada />;
-  if (currentScreen === 'bloqueada') return <Bloqueada />;
-  if (currentScreen === 'mapa') return <Mapa />;
-
-  return (
-    <div id="top" className="min-h-screen bg-background text-on-surface">
+function AppRoutes() {
+  const location = useLocation();
+  const { subscription, status } = useSubscription();
+  const blocked = status === 'ready' && !subscription.access;
+  const urgentTrial = status === 'ready' && subscription.in_trial && subscription.trial_days_left <= 5;
+  return <div id="top" className={`level-app-shell min-h-screen bg-background text-on-surface${urgentTrial ? ' level-trial-active' : ''}`}>
+    <ShaderBackground opacity={0.2} />
+    <div className="level-app-content">
       <TopNavBar />
-      <OverviewScreen />
-      <ModalsContainer />
-      {isSearchOpen && (
-        <div className="fixed inset-0 z-[120] bg-black/65 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={() => setIsSearchOpen(false)}>
-          <div className="mx-auto max-w-xl rounded-2xl border border-white/10 bg-[#17191d] p-3 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-            <label className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-4 py-3">
-              <span className="material-symbols-outlined text-[#9ca3af]">search</span>
-              <span className="sr-only">Busca global</span>
-              <input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar em todo o Orby" className="w-full bg-transparent text-base text-white outline-none placeholder:text-[#737985]" />
-              <kbd className="rounded border border-white/10 px-2 py-1 text-[10px] text-[#8b919d]">ESC</kbd>
-            </label>
-            <p className="px-4 py-5 text-sm text-[#8b919d]">
-              {searchQuery ? `Buscando por “${searchQuery}”` : 'Digite para encontrar tarefas, despesas e treinos.'}
-            </p>
-          </div>
-        </div>
-      )}
+      <div className="level-app-main min-h-screen transition-[padding] duration-200 motion-reduce:transition-none md:pl-[var(--level-sidebar-width)]">
+        {!blocked ? <TrialBanner /> : null}
+        {blocked ? <ExpiredPaywall /> : <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <Suspense fallback={<PageFallback />}>
+              <Routes location={location}>
+                <Route path="/" element={<OverviewScreen />} />
+                <Route path="/financeiro" element={<FinanceScreen />} />
+                <Route path="/agenda" element={<RoutineScreen />} />
+                <Route path="/treinos" element={<TrainingScreen />} />
+                <Route path="/alimentacao" element={<NutritionScreen />} />
+                <Route path="/perfil" element={<ProfileScreen />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>}
+      </div>
+      {!blocked ? <BottomNav /> : null}
+      {!blocked ? <Suspense fallback={null}><ModalsContainer /></Suspense> : null}
+      {!blocked ? <LevelUpOverlay /> : null}
+      {!blocked ? <XpFeedback /> : null}
+      {!blocked ? <AssistantCommand /> : null}
+      {!blocked ? <Suspense fallback={null}><FirstLoginOnboarding /></Suspense> : null}
     </div>
-  );
-};
+  </div>;
+}
 
 export default function App() {
-  return <AppContextProvider><AppRouter /></AppContextProvider>;
+  return <MotionConfig reducedMotion="user">
+    <IdentityProvider>
+      <PreferencesProvider>
+        <SubscriptionProvider>
+          <ProgressProvider>
+            <AppContextProvider>
+              <CalendarProvider>
+                <FinanceProvider>
+                  <TrainingProvider>
+                    <NutritionProvider>
+                      <AssistantProvider><AppRoutes /></AssistantProvider>
+                    </NutritionProvider>
+                  </TrainingProvider>
+                </FinanceProvider>
+              </CalendarProvider>
+            </AppContextProvider>
+          </ProgressProvider>
+        </SubscriptionProvider>
+      </PreferencesProvider>
+    </IdentityProvider>
+  </MotionConfig>;
 }

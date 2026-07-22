@@ -9,13 +9,10 @@ $uid = require_login();
 require_rate_limit('subscription', 60, 60);
 session_write_close();
 
-// So leitura. Mudanca de plano e server-side (webhook), nunca por aqui.
-$stmt = get_db()->prepare('SELECT plan, status, current_period_end FROM subscriptions WHERE user_id = ?');
-$stmt->execute([$uid]);
-$row = $stmt->fetch();
-
-echo json_encode([
-    'plan' => user_plan($uid),
-    'status' => $row['status'] ?? 'active',
-    'current_period_end' => $row['current_period_end'] ?? null,
-]);
+// So leitura, consulta unica. Mudanca de plano e server-side (webhook), nunca por aqui.
+$snapshot = (new SubscriptionRepository(get_db()))->findByUserId($uid);
+$response = (new SubscriptionPolicy(subscription_real_clock(...)))->describeForApi($snapshot);
+$response['price_cents'] = defined('MERCADOPAGO_INDIVIDUAL_PRICE_CENTS')
+    ? max(0, (int)MERCADOPAGO_INDIVIDUAL_PRICE_CENTS)
+    : 1990;
+echo json_encode($response);

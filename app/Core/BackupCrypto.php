@@ -33,7 +33,9 @@ const BACKUP_ARTIFACT_ALGO_XCHACHA20POLY1305_SECRETSTREAM = 1;
 /** Limite maximo de bytes de ciphertext por frame — protege contra frame gigante/DoS de memoria. */
 const BACKUP_CRYPTO_MAX_FRAME_BYTES = 1_048_576; // 1 MiB
 
-const BACKUP_CRYPTO_ENV_KEY_NAME = 'ORBY_BACKUP_KEY';
+const BACKUP_CRYPTO_ENV_KEY_NAME = 'LEVELOS_BACKUP_KEY';
+// Instalações antigas exportavam o nome legado; aceito até o rename no servidor.
+const BACKUP_CRYPTO_LEGACY_ENV_KEY_NAME = 'ORBY_BACKUP_KEY';
 
 /** Excecao segura: mensagem sempre fixa, nunca inclui a chave, plaintext ou bytes brutos. */
 class BackupCryptoException extends RuntimeException {
@@ -61,15 +63,19 @@ function backup_crypto_require_sodium(): void {
 
 /**
  * Le e valida a chave de criptografia de uma variavel de ambiente
- * (default ORBY_BACKUP_KEY): precisa ser base64 estrito de exatamente
+ * (default LEVELOS_BACKUP_KEY, aceitando o legado ORBY_BACKUP_KEY): precisa ser
+ * base64 estrito de exatamente
  * SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES apos decode.
- * Nunca aceita fallback (DB_PASS, valor hardcoded, string curta) e
+ * Nunca aceita fallback de VALOR (DB_PASS, valor hardcoded, string curta) e
  * nunca inclui o valor lido na mensagem de erro.
  */
 function backup_crypto_read_key(string $envName = BACKUP_CRYPTO_ENV_KEY_NAME): string {
     backup_crypto_require_sodium();
 
     $raw = getenv($envName);
+    if (($raw === false || $raw === '') && $envName === BACKUP_CRYPTO_ENV_KEY_NAME) {
+        $raw = getenv(BACKUP_CRYPTO_LEGACY_ENV_KEY_NAME);
+    }
     if ($raw === false || $raw === '') {
         throw new BackupCryptoException('backup encryption key is not configured');
     }

@@ -3,8 +3,8 @@
 ## Contexto do projeto
 
 Orby / Painel Max e uma plataforma self-hosted de rotina e financas pessoais.
-O projeto foi feito para hospedagem compartilhada comum, com PHP 8, MySQL,
-JavaScript vanilla e PWA. Nao ha framework, bundler ou etapa de build.
+O backend usa PHP 8 e MySQL. O frontend canonico usa React 19, TypeScript,
+Vite e Tailwind CSS v4 dentro de `frontend/`.
 
 Prioridade do produto: manter uma experiencia simples, rapida e confiavel para
 agenda, financeiro, treino, autenticacao, backup e notificacoes.
@@ -13,17 +13,26 @@ agenda, financeiro, treino, autenticacao, backup e notificacoes.
 
 - Back-end: PHP 8 com PDO e prepared statements.
 - Banco: MySQL, schema base em `schema.sql` e alteracoes em `migrations/`.
-- Front-end: HTML/CSS/JavaScript vanilla, com assets em `assets/`.
+- Front-end canonico: React 19 + TypeScript + Vite + Tailwind v4 em `frontend/`.
+- Front-end legado: view isolada em `app/Shared/Dashboard/LegacyDashboardView.php`
+  + `assets/app.*`, mantida temporariamente para compatibilidade e testes.
 - PWA: `manifest.json` e `sw.js`.
 - Auth: sessao PHP, bcrypt, CSRF, rate limit, TOTP e login com Google.
 - Deploy: GitHub Actions via FTPS para Hostinger.
-- Sem npm obrigatorio, sem React, sem Next, sem build step.
+- Build: npm em `frontend/`; `frontend/dist/` e gerado e nunca e fonte.
 
 ## Arquivos importantes
 
-- `index.php`: app principal autenticado.
-- `assets/app.js`: logica principal do front-end.
-- `assets/app.css`: estilos principais.
+- `frontend/src/main.tsx`: entrada unica do frontend React.
+- `frontend/src/App.tsx`: providers e rotas do aplicativo.
+- `frontend/src/modules/`: telas e estado por dominio.
+- `frontend/public/`: assets estaticos fonte do React.
+- `frontend/dist/`: artefato gerado; nao editar nem versionar.
+- `frontend/scripts/build-php-shell.mjs`: gera o shell PHP autenticado do deploy.
+- `index.php`: front controller pequeno; autentica e delega a renderizacao.
+- `app/Shared/DashboardView.php`: adaptador da view legada local.
+- `app/Shared/Dashboard/LegacyDashboardView.php` e `assets/app.*`: legado de
+  migracao; nao adicionar UI nova aqui.
 - `assets/auth.css`: estilos de login/cadastro.
 - `auth.php`: login, sessao, CSRF, rate limit e helpers de seguranca.
 - `db.php`: conexao PDO.
@@ -39,26 +48,23 @@ agenda, financeiro, treino, autenticacao, backup e notificacoes.
 
 ## Como rodar localmente
 
-Requisitos:
-
-- PHP 8.x com `pdo_mysql`.
-- MySQL acessivel.
-- `config.php` criado a partir de `config.example.php`.
-- Banco criado com `schema.sql` e migrations necessarias.
-
-Comando padrao:
+Preview visual do frontend:
 
 ```bash
-php -S localhost:8080
+cd frontend
+npm ci
+npm run dev
 ```
 
-Se o PHP nao estiver no PATH no Windows, usar o caminho local configurado:
+Validacao do frontend:
 
-```powershell
-C:/Users/Max/tools/php/php.exe -S localhost:8080
+```bash
+cd frontend
+npm run validate
 ```
 
-Abrir:
+O ambiente integrado com sessao continua exigindo PHP/MySQL. O build de deploy
+gera `frontend/dist/index.php`, que requer `auth.php` e injeta o CSRF.
 
 ```text
 http://localhost:8080
@@ -69,7 +75,8 @@ http://localhost:8080
 - Antes de editar, ler os arquivos relacionados e entender o fluxo existente.
 - Fazer mudancas pequenas, coesas e faceis de revisar.
 - Preservar compatibilidade com hospedagem compartilhada.
-- Nao introduzir frameworks, bundlers, Composer ou npm sem pedido explicito.
+- Nao criar outro app (`web/`, outro `src/`, Next.js ou outro lockfile).
+- Toda UI nova deve entrar no frontend React canonico em `frontend/`.
 - Nao remover funcionalidades existentes sem explicar impacto.
 - Nao alterar `config.php` com valores reais.
 - Nao expor tokens, senhas, secrets, e-mails sensiveis ou dados financeiros.
@@ -101,7 +108,11 @@ Este projeto lida com dados financeiros e autenticacao. Sempre verificar:
 
 ## Front-end
 
-- Manter JavaScript vanilla.
+- Manter React/TypeScript/Vite/Tailwind dentro de `frontend/`.
+- Nao editar `frontend/dist/`; sempre reconstruir com npm.
+- Nao criar telas novas no `index.php`, na view legada ou em `assets/app.js`.
+- O legado so pode ser removido quando seus endpoints, regras e testes tiverem
+  equivalencia comprovada no React.
 - Evitar dependencias novas sem necessidade real.
 - Preservar responsividade mobile e desktop.
 - Validar estados vazios, loading, erro e sucesso.

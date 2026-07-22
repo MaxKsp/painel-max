@@ -265,8 +265,8 @@ return function (): void {
     $validatedRealBackup = backup_contract_validate($realBackupContract, $validatedRealSchema);
 
     test_assert_true(!in_array('transfers', array_keys($validatedRealBackup['tables']), true), 'transfers must never be classified as a table (it lives inside kv_store).');
-    test_assert_same(9, count($validatedRealBackup['table_order']), 'The real backup contract must declare exactly 9 persistent tables.');
-    foreach (['login_attempts', 'register_attempts', 'rate_hits'] as $ephemeral) {
+    test_assert_same(20, count($validatedRealBackup['table_order']), 'The real backup contract must declare exactly 20 persistent tables.');
+    foreach (['login_attempts', 'register_attempts', 'password_reset_tokens', 'rate_hits', 'google_calendar_tokens', 'google_calendar_events', 'assistant_route_cache'] as $ephemeral) {
         test_assert_same('ephemeral', $validatedRealBackup['tables'][$ephemeral]['kind'], "$ephemeral must be classified as ephemeral.");
         test_assert_true(!in_array($ephemeral, $validatedRealBackup['table_order'], true), "$ephemeral must never appear in table_order.");
     }

@@ -1,6 +1,6 @@
 export { Icon } from "./Icon"
 export { Badge } from "./Badge"
+export { EmptyState } from "./EmptyState"
 export { ProgressRing } from "./ProgressRing"
 export { Sparkline } from "./Sparkline"
-export { StatCard } from "./StatCard"
 export { SectionCard } from "./SectionCard"

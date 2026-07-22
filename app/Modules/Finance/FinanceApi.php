@@ -24,10 +24,10 @@ function finance_api_save_set(PDO $db, int $uid, string $raw): array {
     }
 
     try {
-        finance_save_set($db, $uid, $set, $body['value']);
+        finance_save_set($db, $uid, $set, $body['value'], true);
         return ['status' => 200, 'body' => ['ok' => true]];
     } catch (Throwable $e) {
         error_log('finance.php: ' . $e->getMessage());
-        return ['status' => 500, 'body' => ['error' => 'erro ao salvar — banco atualizado? (ver migrations)']];
+        return ['status' => 500, 'body' => ['error' => 'Não foi possível salvar os dados financeiros.']];
     }
 }
