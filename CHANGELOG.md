@@ -1,6 +1,6 @@
 # Changelog
 
-Resumo das entregas recentes do Orby.
+Resumo das entregas recentes do Level OS.
 
 ## Financeiro — experiência de app de banco
 - Visão consolidada: patrimônio líquido, saldo total, fatura dos cartões e crédito disponível.

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Modernizar a arquitetura da Orby de forma incremental, preservando 100% da
+Modernizar a arquitetura do Level OS de forma incremental, preservando 100% da
 compatibilidade com a aplicacao atual durante a migracao.
 
 Esta modernizacao e estrutural. Ela nao autoriza mudancas funcionais por si

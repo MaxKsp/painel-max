@@ -1,6 +1,6 @@
 # AI Automation Pipeline
 
-This directory contains a local, deterministic pipeline for Orby architectural
+This directory contains a local, deterministic pipeline for Level OS architectural
 phases.
 
 The pipeline exists to keep Codex, Claude Code, validation scripts, and Git in

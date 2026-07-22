@@ -3,7 +3,7 @@
 ## Purpose
 
 This document defines the official branch, commit, and rollback workflow for
-Orby.
+Level OS.
 
 ## Branch Policy
 

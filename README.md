@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MaxKsp/orby/actions/workflows/tests.yml"><img src="https://github.com/MaxKsp/orby/actions/workflows/tests.yml/badge.svg" alt="Testes automatizados" /></a>
+  <a href="https://github.com/MaxKsp/level-os/actions/workflows/tests.yml"><img src="https://github.com/MaxKsp/level-os/actions/workflows/tests.yml/badge.svg" alt="Testes automatizados" /></a>
   <img src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.8" />
   <img src="https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php&logoColor=white" alt="PHP 8.2 ou superior" />
@@ -356,8 +356,8 @@ Todos os endpoints privados exigem sessão; endpoints de escrita também aplicam
 ### 1. Obtenha o código
 
 ```bash
-git clone https://github.com/MaxKsp/orby.git
-cd orby
+git clone https://github.com/MaxKsp/level-os.git
+cd level-os
 ```
 
 ### 2. Configure o backend

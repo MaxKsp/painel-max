@@ -1,4 +1,4 @@
-# Arquitetura do frontend Orby
+# Arquitetura do frontend Level OS
 
 Referência dos contratos existentes em `src/context/AppContext.tsx` e `src/components/ui`. O contexto é client-side: tarefas e exercícios persistem em `localStorage`; os demais dados voltam aos valores iniciais após reload.
 
@@ -79,7 +79,7 @@ npm run validate
 
 ### Contraste completo
 
-> Atue como especialista WCAG 2.2. Analise todos os pares de primeiro plano/fundo deste frontend React + Tailwind CSS v4, incluindo normal, hover, focus, active, disabled, placeholder, erro e texto sobre gradientes. Informe hexadecimais computados, razão, critério 1.4.3/1.4.11, AA/AAA e aprovação. Considere texto normal, texto grande, ícones informativos, bordas e foco. Entregue tabela priorizada e substituições que preservem o tema escuro Orby.
+> Atue como especialista WCAG 2.2. Analise todos os pares de primeiro plano/fundo deste frontend React + Tailwind CSS v4, incluindo normal, hover, focus, active, disabled, placeholder, erro e texto sobre gradientes. Informe hexadecimais computados, razão, critério 1.4.3/1.4.11, AA/AAA e aprovação. Considere texto normal, texto grande, ícones informativos, bordas e foco. Entregue tabela priorizada e substituições que preservem o tema escuro Level OS.
 
 ### Tokens Tailwind
 
@@ -95,4 +95,4 @@ npm run validate
 
 ### Critérios de aceite
 
-> Converta a auditoria Orby em critérios verificáveis: 4,5:1 para texto normal, 3:1 para texto grande, 3:1 para componentes gráficos/bordas essenciais e foco perceptível. Inclua 200% de zoom, alto contraste, daltonismo simulado e estados interativos. Separe bloqueadores, recomendações AAA e exceções justificadas com evidência.
+> Converta a auditoria Level OS em critérios verificáveis: 4,5:1 para texto normal, 3:1 para texto grande, 3:1 para componentes gráficos/bordas essenciais e foco perceptível. Inclua 200% de zoom, alto contraste, daltonismo simulado e estados interativos. Separe bloqueadores, recomendações AAA e exceções justificadas com evidência.

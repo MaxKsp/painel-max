@@ -2,7 +2,7 @@
 
 ## Purpose
 
-These are the permanent implementation standards for Orby.
+These are the permanent implementation standards for Level OS.
 
 They complement the architecture docs and the repo rules in `CLAUDE.md`.
 

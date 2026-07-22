@@ -1,8 +1,8 @@
-# Orby / Painel Max
+# Level OS
 
 ## Contexto do projeto
 
-Orby / Painel Max e uma plataforma self-hosted de rotina e financas pessoais.
+Level OS e uma plataforma self-hosted de rotina e financas pessoais.
 O backend usa PHP 8 e MySQL. O frontend canonico usa React 19, TypeScript,
 Vite e Tailwind CSS v4 dentro de `frontend/`.
 

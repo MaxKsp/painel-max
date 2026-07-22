@@ -1,4 +1,4 @@
-You are Codex acting as the architecture gate for an Orby migration phase.
+You are Codex acting as the architecture gate for a Level OS migration phase.
 
 Read the phase definition and evaluate it in read-only mode.
 

@@ -1408,7 +1408,7 @@ function Invoke-FixAttempt {
     )
 
     $prompt = @"
-You are Claude Code fixing a rejected Orby migration phase.
+You are Claude Code fixing a rejected Level OS migration phase.
 
 Only address the blockers below.
 Do not widen scope.

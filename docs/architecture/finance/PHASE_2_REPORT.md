@@ -4,7 +4,7 @@ Data: 2026-07-13
 
 ## Objetivo executado
 
-Caracterizar o comportamento atual do Financeiro da Orby antes de qualquer
+Caracterizar o comportamento atual do Financeiro do Level OS antes de qualquer
 extracao para `app/Modules/Finance`.
 
 Escopo desta continuacao:

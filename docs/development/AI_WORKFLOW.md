@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the official way AI agents are used in Orby.
+This document defines the official way AI agents are used in Level OS.
 
 It exists to reduce prompt repetition and to keep Claude and Codex aligned on
 scope, tools, and expected outputs.

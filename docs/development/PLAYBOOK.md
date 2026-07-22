@@ -3,7 +3,7 @@
 ## Purpose
 
 This directory is the permanent execution guide for day-to-day development in
-Orby.
+Level OS.
 
 It does not replace the architecture docs. It tells contributors and AI agents
 how to work on the project without re-explaining the same context in every

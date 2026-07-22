@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Registrar a fronteira atual do Financeiro da Orby antes de qualquer extracao
+Registrar a fronteira atual do Financeiro do Level OS antes de qualquer extracao
 para `app/Modules/Finance`.
 
 Este documento descreve o comportamento atual como referencia de compatibilidade,
@@ -10,7 +10,7 @@ Este documento descreve o comportamento atual como referencia de compatibilidade
 
 ## Resumo executivo
 
-Hoje o "Financeiro" da Orby nao e um bloco unico.
+Hoje o "Financeiro" do Level OS nao e um bloco unico.
 
 Ele se divide em duas zonas:
 

@@ -1,6 +1,6 @@
 # Modules
 
-`Modules` sera a casa do codigo de negocio da Orby durante a migracao
+`Modules` sera a casa do codigo de negocio do Level OS durante a migracao
 incremental.
 
 ## Modulos previstos

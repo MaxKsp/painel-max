@@ -1,4 +1,4 @@
-You are Claude Code implementing an approved Orby migration phase.
+You are Claude Code implementing an approved Level OS migration phase.
 
 Implement only the approved scope.
 

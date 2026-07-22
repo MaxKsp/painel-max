@@ -1,6 +1,6 @@
 # App Architecture Staging
 
-Esta pasta prepara a arquitetura alvo da Orby sem alterar o comportamento
+Esta pasta prepara a arquitetura alvo do Level OS sem alterar o comportamento
 atual da aplicacao.
 
 ## Objetivo da Fase 1
