@@ -110,9 +110,9 @@ Este projeto lida com dados financeiros e autenticacao. Sempre verificar:
 
 - Manter React/TypeScript/Vite/Tailwind dentro de `frontend/`.
 - Nao editar `frontend/dist/`; sempre reconstruir com npm.
-- Nao criar telas novas no `index.php`, na view legada ou em `assets/app.js`.
-- O legado so pode ser removido quando seus endpoints, regras e testes tiverem
-  equivalencia comprovada no React.
+- Nao criar telas novas no `index.php` ou nas views PHP; o frontend canonico
+  fica em `frontend/src/`.
+- Remover residuos legados somente depois de comprovar equivalencia no React.
 - Evitar dependencias novas sem necessidade real.
 - Preservar responsividade mobile e desktop.
 - Validar estados vazios, loading, erro e sucesso.
@@ -127,7 +127,7 @@ Este projeto lida com dados financeiros e autenticacao. Sempre verificar:
 - Usar codigos HTTP coerentes: 400, 401, 402, 403, 405, 413, 429, 500.
 - Validar payload antes de gravar.
 - Limitar tamanho de payload quando houver risco de abuso.
-- Manter contratos existentes para nao quebrar `assets/app.js`.
+- Manter contratos existentes para nao quebrar os stores e adapters React.
 
 ## Validacao antes de finalizar
 

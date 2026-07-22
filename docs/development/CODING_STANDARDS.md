@@ -29,14 +29,12 @@ For migration work:
 - extraction should preserve function signatures when the legacy facade depends
   on them
 
-## JavaScript
+## Frontend
 
-- Use vanilla JavaScript.
-- Preserve current routing and contracts expected by `assets/app.js`.
-- Do not move finance logic out of the front-end unless the migration phase
-  explicitly covers it.
-- Avoid introducing bundlers, module transforms, or npm-only workflows without
-  explicit approval.
+- Use React, TypeScript, Vite and Tailwind CSS v4 under `frontend/`.
+- Keep routes, stores and API contracts backwards compatible.
+- Keep financial calculations in typed modules with focused Vitest coverage.
+- Do not edit `frontend/dist/`; generate it with the documented npm build.
 
 ## SQL and Database
 

@@ -33,7 +33,7 @@ jobs:
         run: npm run validate
 
   backend:
-    name: Backend PHP e legado JS
+    name: Backend PHP e scripts JS
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -92,14 +92,6 @@ jobs:
           for f in "${files[@]}"; do
             echo "Validando: $f"
             node --check "$f"
-          done
-
-      - name: Rodar testes JS (tests/js/*_test.js)
-        run: |
-          set -e
-          for f in tests/js/*_test.js; do
-            echo "== $f =="
-            node "$f"
           done
 
       - name: Rodar testes PHP (tests/run.php)
