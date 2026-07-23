@@ -112,13 +112,8 @@ final class AssistantService {
             if ($this->requiresConfirmation($route)) {
                 try {
                     $previewData = $this->executor->preview($userId, $route);
-                } catch (DietPlanBudgetExceeded $budgetError) {
-                    $targetCents = max(1, (int)floor($budgetError->budgetCents * 0.90));
-                    $correction = $routingText . "\n\nCORREÇÃO OBRIGATÓRIA: o rascunho somou R$ "
-                        . number_format($budgetError->estimatedCents / 100, 2, ',', '.')
-                        . ', acima do orçamento de R$ ' . number_format($budgetError->budgetCents / 100, 2, ',', '.')
-                        . '. Recrie o plano para que a soma real do período seja no máximo R$ '
-                        . number_format($targetCents / 100, 2, ',', '.') . '.';
+                } catch (DietPlanBudgetOutsideTolerance $budgetError) {
+                    $correction = self::dietBudgetCorrection($routingText, $budgetError);
                     $routed = $this->router->route(
                         $userId, $correction, $this->executor->context($userId, $module, 'create_diet_plan'), $module,
                     );
@@ -171,15 +166,9 @@ final class AssistantService {
             }
             try {
                 $result = $this->executor->execute($userId, $route);
-            } catch (DietPlanBudgetExceeded $budgetError) {
+            } catch (DietPlanBudgetOutsideTolerance $budgetError) {
                 $this->db->rollBack();
-                $targetCents = max(1, (int)floor($budgetError->budgetCents * 0.90));
-                $correction = $routingText . "\n\nCORREÇÃO OBRIGATÓRIA: o cardápio anterior somou R$ "
-                    . number_format($budgetError->estimatedCents / 100, 2, ',', '.')
-                    . ', acima do orçamento de R$ ' . number_format($budgetError->budgetCents / 100, 2, ',', '.')
-                    . '. Recrie o plano trocando quantidades e alimentos para que a soma real das refeições durante todo o período seja no máximo R$ '
-                    . number_format($targetCents / 100, 2, ',', '.')
-                    . '. Não reduza apenas o campo estimatedCostBRL: os custos individuais das refeições também devem fechar essa soma.';
+                $correction = self::dietBudgetCorrection($routingText, $budgetError);
 
                 $routed = $this->router->route(
                     $userId,
@@ -454,6 +443,22 @@ final class AssistantService {
         $arguments = is_array($route['arguments'] ?? null) ? $route['arguments'] : [];
         $valueCents = is_numeric($arguments['value'] ?? null) ? (int)round((float)$arguments['value'] * 100) : 0;
         return $valueCents >= max(100, min(100000000, $threshold));
+    }
+
+    private static function dietBudgetCorrection(
+        string $routingText,
+        DietPlanBudgetOutsideTolerance $budgetError,
+    ): string {
+        $direction = $budgetError->isBelowTarget() ? 'muito abaixo' : 'muito acima';
+
+        return $routingText . "\n\nCORREÇÃO OBRIGATÓRIA: o cardápio calculado somou R$ "
+            . number_format($budgetError->estimatedCents / 100, 2, ',', '.')
+            . ', valor ' . $direction . ' da meta de R$ '
+            . number_format($budgetError->budgetCents / 100, 2, ',', '.')
+            . '. Recrie quantidades, alimentos e custos individuais para que a soma real de todas as refeições do período fique entre R$ '
+            . number_format($budgetError->minimumCents / 100, 2, ',', '.')
+            . ' e R$ ' . number_format($budgetError->maximumCents / 100, 2, ',', '.')
+            . ', preferencialmente próxima da meta. Não altere apenas estimatedCostBRL: os custos individuais das refeições precisam fechar a soma.';
     }
 
     /** @param array<string,mixed> $route @return array<string,mixed> */

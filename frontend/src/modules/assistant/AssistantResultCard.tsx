@@ -104,6 +104,9 @@ export function AssistantResultCard({ response, onView, approval, onApprovalChan
     const plan = parseDietPlan(approval?.draft ?? data?.plan)
     if (!plan) return null
     const mealCount = plan.days.reduce((total, day) => total + day.meals.length, 0)
+    const minimumBudget = plan.budgetBRL * 0.9
+    const maximumBudget = plan.budgetBRL * 1.1
+    const outsideBudgetTolerance = plan.estimatedCostBRL < minimumBudget || plan.estimatedCostBRL > maximumBudget
     const updateMeal = (dayIndex: number, mealIndex: number, field: "name" | "description" | "estimatedCostBRL", value: string) => {
       if (!onApprovalChange) return
       const days = plan.days.map((day, currentDay) => ({
@@ -122,7 +125,7 @@ export function AssistantResultCard({ response, onView, approval, onApprovalChan
         <div className="grid grid-cols-3 gap-3" aria-label="Resumo do plano alimentar">
           <div><p className="numeric-value font-semibold text-on-surface">{plan.periodDays}</p><p className="text-[10px] text-muted">dias</p></div>
           <div><p className="numeric-value font-semibold text-on-surface">{mealCount}</p><p className="text-[10px] text-muted">refeições</p></div>
-          <div><p className="numeric-value font-semibold text-on-surface">{brl(plan.estimatedCostBRL)}</p><p className="text-[10px] text-muted">custo estimado</p></div>
+          <div><p className="numeric-value font-semibold text-on-surface">{brl(plan.estimatedCostBRL)}</p><p className="text-[10px] text-muted">estimado · meta {brl(plan.budgetBRL)}</p></div>
         </div>
         {response.status === "confirmation" ? (
           <details className="mt-3 border-t border-outline-variant pt-3" open={editing || undefined}>
@@ -149,7 +152,7 @@ export function AssistantResultCard({ response, onView, approval, onApprovalChan
                 </section>
               ))}
             </div>
-            {plan.estimatedCostBRL > plan.budgetBRL ? <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-[11px] text-error">O custo editado excede o orçamento. Ajuste as refeições antes de aprovar.</p> : null}
+            {outsideBudgetTolerance ? <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-[11px] text-error">O custo deve ficar entre {brl(minimumBudget)} e {brl(maximumBudget)}. Ajuste as refeições antes de aprovar.</p> : null}
             {Boolean(data?.hasActivePlan) ? <p className="mt-3 rounded-lg bg-warning/10 px-3 py-2 text-[11px] text-on-surface">Ao aprovar, o plano atual será arquivado e poderá ser restaurado.</p> : null}
           </details>
         ) : <ResultButton icon={<ChefHat className="size-4" />} label="Ver cardápio completo" onClick={() => onView("alimentacao")} />}

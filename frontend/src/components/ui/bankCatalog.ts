@@ -3,8 +3,8 @@ import { normalizeBankSearch, POPULAR_BANKS, resolveBankSlug } from "./BankLogo"
 
 /**
  * Diretório carregado sob demanda a partir de guibranco/BancosBrasileiros.
- * Os SVGs continuam locais em @edusites/bancos-brasil; instituições sem uma
- * marca vetorial confiável recebem o fallback tipográfico de BankLogo.
+ * As marcas mais conhecidas usam PNG local; instituições sem uma marca
+ * licenciada e confiável recebem o fallback tipográfico de BankLogo.
  */
 
 export interface BankOption {

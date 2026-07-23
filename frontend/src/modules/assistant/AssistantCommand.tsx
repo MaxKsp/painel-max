@@ -51,12 +51,14 @@ function adjustmentStarter(response: AssistantResponse): string {
   return "Ajuste o rascunho proposto: "
 }
 
-function dietDraftExceedsBudget(approval: AssistantApproval | undefined): boolean {
+function dietDraftOutsideBudgetTolerance(approval: AssistantApproval | undefined): boolean {
   const draft = approval?.draft
   if (!draft) return false
   const budget = typeof draft.budgetBRL === "number" ? draft.budgetBRL : Number(draft.budgetBRL)
   const estimated = typeof draft.estimatedCostBRL === "number" ? draft.estimatedCostBRL : Number(draft.estimatedCostBRL)
-  return Number.isFinite(budget) && Number.isFinite(estimated) && estimated > budget
+  return Number.isFinite(budget)
+    && Number.isFinite(estimated)
+    && (estimated < budget * 0.9 || estimated > budget * 1.1)
 }
 
 function useAutoResize(minHeight: number, maxHeight: number) {
@@ -473,7 +475,7 @@ export function AssistantCommand() {
                                           )
                                         }}
                                         disabled={assistant.loading
-                                          || dietDraftExceedsBudget(approvalByToken[message.response.actionToken as string])
+                                          || dietDraftOutsideBudgetTolerance(approvalByToken[message.response.actionToken as string])
                                           || (approvalByToken[message.response.actionToken as string]?.mode === "replace_selected" && !(approvalByToken[message.response.actionToken as string]?.selectedWorkoutIds?.length))}
                                         className="min-h-10 rounded-lg bg-primary px-3 text-xs font-semibold text-on-primary hover:bg-primary/90 disabled:opacity-50"
                                       >

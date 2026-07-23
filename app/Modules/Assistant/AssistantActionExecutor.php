@@ -364,7 +364,7 @@ final class AssistantActionExecutor {
         }
 
         $estimatedCents = DietPlanCostCalculator::totalForPeriod($dailyCostsCents, $periodDays);
-        if ($estimatedCents > $budgetCents) throw new DietPlanBudgetExceeded($estimatedCents, $budgetCents);
+        DietPlanCostCalculator::requireNearBudget($estimatedCents, $budgetCents);
 
         $plan = [
             'goal' => $goal,

@@ -27,8 +27,8 @@ return static function (): void {
     foreach ($schema as $sql) $db->exec($sql);
 
     $diet = [
-        'goal'=>'emagrecimento', 'periodDays'=>1, 'budgetBRL'=>100.0, 'estimatedCostBRL'=>40.0,
-        'days'=>[['day'=>1, 'meals'=>[['name'=>'Almoço','description'=>'Arroz, feijão e frango','estimatedCostBRL'=>40.0]]]],
+        'goal'=>'emagrecimento', 'periodDays'=>1, 'budgetBRL'=>100.0, 'estimatedCostBRL'=>95.0,
+        'days'=>[['day'=>1, 'meals'=>[['name'=>'Almoço','description'=>'Arroz, feijão e frango','estimatedCostBRL'=>95.0]]]],
         'createdAt'=>'2026-07-22T12:00:00-03:00', 'source'=>'assistant',
     ];
     $preview = (new AssistantActionExecutor($db))->preview(7, ['action'=>'create_diet_plan','arguments'=>$diet]);

@@ -1,16 +1,25 @@
 <?php
 declare(strict_types=1);
 
-final class DietPlanBudgetExceeded extends InvalidArgumentException {
+final class DietPlanBudgetOutsideTolerance extends InvalidArgumentException {
     public function __construct(
         public readonly int $estimatedCents,
         public readonly int $budgetCents,
+        public readonly int $minimumCents,
+        public readonly int $maximumCents,
     ) {
-        parent::__construct('Plano estimado acima do orçamento informado.');
+        parent::__construct('Plano estimado fora da faixa do orçamento informado.');
+    }
+
+    public function isBelowTarget(): bool {
+        return $this->estimatedCents < $this->minimumCents;
     }
 }
 
 final class DietPlanCostCalculator {
+    public const MINIMUM_BUDGET_PERCENT = 90;
+    public const MAXIMUM_BUDGET_PERCENT = 110;
+
     /** @param list<int> $dailyCostsCents */
     public static function totalForPeriod(array $dailyCostsCents, int $periodDays): int {
         if ($dailyCostsCents === [] || $periodDays < 1) {
@@ -27,5 +36,35 @@ final class DietPlanCostCalculator {
             $total += $cost;
         }
         return $total;
+    }
+
+    /** @return array{minimumCents:int,maximumCents:int} */
+    public static function targetRange(int $budgetCents): array {
+        if ($budgetCents < 1) {
+            throw new InvalidArgumentException('Orçamento inválido.');
+        }
+
+        return [
+            'minimumCents' => intdiv($budgetCents * self::MINIMUM_BUDGET_PERCENT, 100),
+            'maximumCents' => intdiv(
+                ($budgetCents * self::MAXIMUM_BUDGET_PERCENT) + 99,
+                100,
+            ),
+        ];
+    }
+
+    public static function requireNearBudget(int $estimatedCents, int $budgetCents): void {
+        $range = self::targetRange($budgetCents);
+        if (
+            $estimatedCents < $range['minimumCents']
+            || $estimatedCents > $range['maximumCents']
+        ) {
+            throw new DietPlanBudgetOutsideTolerance(
+                $estimatedCents,
+                $budgetCents,
+                $range['minimumCents'],
+                $range['maximumCents'],
+            );
+        }
     }
 }

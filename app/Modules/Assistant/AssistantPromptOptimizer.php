@@ -20,6 +20,12 @@ final class AssistantPromptOptimizer {
             return true;
         }
 
+        // Uma intenção inequívoca do módulo tem precedência sobre palavras que
+        // também podem ser categorias ou descrições. Ex.: em Finanças,
+        // "alimentação" é a categoria de "Lançar R$ 42,90...", não um pedido
+        // para o agente de alimentação.
+        if (self::preferredAction($text, $module) !== null) return false;
+
         $signals = self::domainSignals();
         if ($module !== null && isset($signals[$module])) {
             if (self::containsAny($normalized, $signals[$module])) return false;

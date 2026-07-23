@@ -5,6 +5,7 @@ import { BankLogo } from "../../components/ui/BankLogo"
 import { BankPicker } from "../../components/ui/BankPicker"
 import type { AccountV2 } from "./contracts"
 import { genId, useFinance } from "./store"
+import { suggestAccountLabel, updateAccountIdentity } from "./accountLabel"
 
 const TYPES: { value: string; label: string; card: boolean }[] = [
   { value: "conta", label: "Conta corrente", card: false },
@@ -15,7 +16,7 @@ const TYPES: { value: string; label: string; card: boolean }[] = [
 ]
 
 const EMPTY: AccountV2 = {
-  id: "", label: "", tipo: "conta", saldo: 0, chequeEspecial: 0, limite: 0,
+  id: "", label: suggestAccountLabel("Nubank", "conta"), tipo: "conta", saldo: 0, chequeEspecial: 0, limite: 0,
   fatura: 0, fechamento: null, vencimento: null, bank: "Nubank", principal: false, createdAt: null,
 }
 
@@ -41,15 +42,21 @@ export function AccountForm({ initial, resetKey, onCancel, onSave }: { initial?:
   const { bankFavorites, toggleBankFavorite } = useFinance()
   const [a, setA] = useState<AccountV2>(EMPTY)
   const [err, setErr] = useState("")
+  const [autoLabel, setAutoLabel] = useState(true)
 
   useEffect(() => {
-    setA(initial ? { ...initial } : { ...EMPTY })
+    const next = initial ? { ...initial } : { ...EMPTY }
+    setA(next)
+    setAutoLabel(!initial || initial.label === suggestAccountLabel(initial.bank, initial.tipo))
     setErr("")
   }, [initial, resetKey])
 
   const isCard = TYPES.find((t) => t.value === a.tipo)?.card ?? false
   const set = (patch: Partial<AccountV2>) => setA((x) => ({ ...x, ...patch }))
   const bankName = a.bank ?? ""
+  const setIdentity = (patch: Pick<Partial<AccountV2>, "bank" | "tipo">) => {
+    setA((current) => updateAccountIdentity(current, patch, autoLabel))
+  }
 
   const submit = () => {
     if (!a.label.trim()) { setErr("Dê um nome à conta."); return }
@@ -62,7 +69,7 @@ export function AccountForm({ initial, resetKey, onCancel, onSave }: { initial?:
         <div className="grid gap-3 sm:grid-cols-[.8fr_1.2fr]">
           <div>
             <label className={lbl}>Tipo</label>
-            <select className={field} value={a.tipo} onChange={(e) => set({ tipo: e.target.value })}>
+            <select className={field} value={a.tipo} onChange={(e) => setIdentity({ tipo: e.target.value })}>
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
@@ -70,14 +77,26 @@ export function AccountForm({ initial, resetKey, onCancel, onSave }: { initial?:
             <label className={lbl}>Banco</label>
             <div className="flex items-center gap-2">
               <BankLogo bank={bankName} size={38} />
-              <BankPicker className="min-w-0 flex-1" value={bankName} onChange={(bank) => set({ bank })} favorites={bankFavorites} onToggleFavorite={toggleBankFavorite} />
+              <BankPicker className="min-w-0 flex-1" value={bankName} onChange={(bank) => setIdentity({ bank })} favorites={bankFavorites} onToggleFavorite={toggleBankFavorite} />
             </div>
           </div>
         </div>
 
         <div>
           <label className={lbl}>Nome / apelido</label>
-          <input className={field} value={a.label} onChange={(e) => set({ label: e.target.value })} placeholder="Ex.: Conta principal" autoFocus />
+          <input
+            className={field}
+            value={a.label}
+            onChange={(e) => {
+              setAutoLabel(false)
+              set({ label: e.target.value })
+            }}
+            placeholder="Ex.: Caixa - CC"
+            autoFocus
+          />
+          <p className="mt-1 text-xs text-muted">
+            {autoLabel ? "Preenchido automaticamente pelo banco e tipo de conta." : "Nome personalizado — banco e tipo não irão sobrescrevê-lo."}
+          </p>
         </div>
 
         {isCard ? (

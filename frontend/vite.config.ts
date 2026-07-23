@@ -25,9 +25,6 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-        // O entrypoint 1.2.0 exporta também um wrapper Vue sem declarar Vue.
-        // Consumimos o core SVG instalado pelo pacote, evitando dependência inútil.
-        '@edusites/bancos-brasil/core': path.resolve(__dirname, 'node_modules/@edusites/bancos-brasil/src/core.js'),
       },
     },
     server: {

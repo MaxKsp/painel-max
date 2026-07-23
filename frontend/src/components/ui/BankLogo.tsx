@@ -1,7 +1,9 @@
-import { svgBanco } from "@edusites/bancos-brasil/core"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 
-/** Logos renderizadas pelo pacote MIT `@edusites/bancos-brasil` 1.2.0. */
+/**
+ * Marcas coloridas em PNG local. Os arquivos foram derivados do projeto MIT
+ * `@edusites/bancos-brasil`; veja public/bank-icons/ATTRIBUTION.md.
+ */
 
 export function normalizeBankSearch(value: string): string {
   return value
@@ -65,10 +67,6 @@ function initials(bank: string): string {
   return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "") || bank.slice(0, 2)).toUpperCase()
 }
 
-function readAccent(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim() || "#518efa"
-}
-
 interface BankLogoProps {
   bank: string | null | undefined
   size?: number
@@ -76,32 +74,37 @@ interface BankLogoProps {
 }
 
 export function BankLogo({ bank, size = 36, className }: BankLogoProps) {
-  const [accent, setAccent] = useState(readAccent)
   const slug = resolveBankSlug(bank)
+  const src = slug ? `/bank-icons/${slug}.png` : null
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    const update = () => setAccent(readAccent())
-    window.addEventListener("level-theme-change", update)
-    return () => window.removeEventListener("level-theme-change", update)
-  }, [])
+    setFailed(false)
+  }, [src])
 
-  const svg = useMemo(
-    () => slug ? svgBanco({ nome: slug, formato: "sem", cor: accent, tamanho: size }) : null,
-    [accent, size, slug],
-  )
   const box = { width: size, height: size } as const
 
-  if (svg && slug) {
+  if (src && slug && !failed) {
     return (
       <span
         role="img"
         aria-label={bank ? `Logo ${bank}` : "Logo do banco"}
         data-bank-logo={slug}
-        data-bank-logo-kind="official-svg"
-        className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container transition-colors ${className ?? ""}`}
+        data-bank-logo-kind="brand-raster"
+        className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container ${className ?? ""}`}
         style={box}
       >
-        <span aria-hidden="true" className="block leading-none" dangerouslySetInnerHTML={{ __html: svg }} />
+        <img
+          alt=""
+          aria-hidden="true"
+          src={src}
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          className="block size-full object-cover"
+          onError={() => setFailed(true)}
+        />
       </span>
     )
   }
@@ -109,34 +112,13 @@ export function BankLogo({ bank, size = 36, className }: BankLogoProps) {
   return (
     <span
       role="img"
-      aria-label={bank ? `Logo vetorial de ${bank}` : "Logo vetorial do banco"}
-      data-bank-logo="fallback-svg"
-      data-bank-logo-kind="generated-svg"
-      className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container-high text-primary ${className ?? ""}`}
+      aria-label={bank ? `Identificação de ${bank}` : "Identificação do banco"}
+      data-bank-logo="fallback-initials"
+      data-bank-logo-kind="initials"
+      className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container-high font-sans text-xs font-bold tracking-tight text-primary ${className ?? ""}`}
       style={box}
     >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 48 48"
-        width={size}
-        height={size}
-        className="block"
-      >
-        <path d="M8 19 24 9l16 10v3H8v-3Zm3 6h4v11h-4V25Zm11 0h4v11h-4V25Zm11 0h4v11h-4V25ZM7 39v-3h34v3H7Z" fill="currentColor" opacity=".2" />
-        <text
-          x="24"
-          y="30"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="currentColor"
-          fontFamily="Geist Variable, sans-serif"
-          fontSize="13"
-          fontWeight="700"
-          letterSpacing=".5"
-        >
-          {bank ? initials(bank) : "BK"}
-        </text>
-      </svg>
+      <span aria-hidden="true">{bank ? initials(bank) : "BK"}</span>
     </span>
   )
 }
